@@ -12,6 +12,7 @@
 - 使用 Jsoup / XPath / JsonPath / CSS 选择器解析网页和 JSON 数据
 - 通过 Rhino JS 引擎执行书源中的自定义 JavaScript 规则
 - 支持小说源（`bookSourceType=0`）和漫画源（`bookSourceType=2`）
+- 内置 4 个小说源 + 4 个漫画源，开箱即用
 
 ### 技术栈
 
@@ -29,9 +30,7 @@
 
 ## 快速开始
 
-### 1. 引入依赖
-
-将 `reader-engine-1.0.0.jar` 安装到本地 Maven 仓库：
+### 1. 安装 jar 到本地仓库
 
 **Linux / macOS (bash):**
 
@@ -50,9 +49,7 @@ mvn install:install-file \
 mvn install:install-file "-Dfile=target/reader-engine-1.0.0.jar" "-DgroupId=cn.kong" "-DartifactId=reader-engine" "-Dversion=1.0.0" "-Dpackaging=jar"
 ```
 
-> **注意**：PowerShell 不支持 `\` 换行，且含 `.` 的参数值需要用引号包裹，否则会被截断。
-
-然后在项目的 `pom.xml` 中添加：
+### 2. 引入依赖
 
 ```xml
 <dependency>
@@ -62,58 +59,26 @@ mvn install:install-file "-Dfile=target/reader-engine-1.0.0.jar" "-DgroupId=cn.k
 </dependency>
 ```
 
-### 2. 使用 BookSourceManager（推荐）
-
-`BookSourceManager` 是高层管理 API，内置 4 个小说源 + 4 个漫画源，开箱即用：
+### 3. 使用
 
 ```java
-import cn.kong.app.engine.BookSourceManager;
-import io.legado.app.data.entities.*;
-
-// 获取管理器（自动加载 8 个内置源）
 BookSourceManager manager = BookSourceManager.getInstance();
 
 // 搜索小说
-List<SearchBook> results = manager.searchNovel("斗破苍穹");
+List<SearchResult> results = manager.searchNovel("斗破苍穹");
 
 // 获取详情
-Book book = manager.getBookInfo(results.get(0));
+SearchResult r = results.get(0);
+BookDetail detail = manager.getBookDetail(r.getBookUrl(), r.getSourceUrl());
 
 // 获取目录
-List<BookChapter> chapters = manager.getChapterList(book);
+List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSourceUrl());
 
-// 获取正文
-String content = manager.getBookContent(book, chapters.get(0));
+// 获取第 1 章正文
+String content = manager.getContent(r.getBookUrl(), r.getSourceUrl(), 0);
 
 // 批量下载前 10 章
-List<String> contents = manager.batchDownloadContent(book, chapters.subList(0, 10));
-```
-
-### 3. 使用 ReaderEngine（底层 API）
-
-如果只需要操作单个书源，可以直接使用 `ReaderEngine`：
-
-```java
-import cn.kong.app.engine.ReaderEngine;
-import io.legado.app.data.entities.*;
-
-// 从 JSON 创建书源
-BookSource source = ReaderEngine.parseBookSource(jsonString);
-
-// 初始化书源（漫画源必须）
-ReaderEngine.initSource(source);
-
-// 搜索
-List<SearchBook> results = ReaderEngine.search(source, "斗破苍穹", 1);
-
-// 获取详情
-Book book = ReaderEngine.getBookInfo(source, results.get(0).getBookUrl());
-
-// 获取目录
-List<BookChapter> chapters = ReaderEngine.getChapterList(source, book);
-
-// 获取正文
-String content = ReaderEngine.getBookContent(source, book, chapters.get(0));
+List<String> contents = manager.batchDownload(r.getBookUrl(), r.getSourceUrl(), 0, 10);
 ```
 
 ## 内置书源
@@ -136,93 +101,130 @@ String content = ReaderEngine.getBookContent(source, book, chapters.get(0));
 | 如漫画 | `https://www.rumanhua.com` | comic |
 | 再漫画 | `https://www.zaimanhua.com` | comic |
 
-> 漫画源在加载时自动执行 `initSource()` 初始化 variable（URL、cookie 等），无需手动调用。
-
 ## API 文档
 
-### BookSourceManager（推荐使用）
+### BookSourceManager（推荐）
 
-单例管理器，提供源管理 + 聚合搜索 + 批量下载等高层 API。
+单例管理器，用户只需传入 `String` 参数和简单 DTO，无需接触内部实体对象。
 
-#### 源管理
+#### 获取实例
 
-| 方法 | 说明 |
-|------|------|
-| `getInstance()` | 获取单例（自动加载内置源） |
-| `importSources(String json)` | 从 JSON 导入书源（支持单个或数组） |
-| `importSources(InputStream is)` | 从输入流导入书源 |
-| `importSource(BookSource source)` | 导入单个书源对象 |
-| `removeSource(String bookSourceUrl)` | 移除指定书源 |
-| `clearAllSources()` | 清除所有书源 |
-| `reloadBuiltinSources()` | 重新加载内置源 |
+```java
+BookSourceManager manager = BookSourceManager.getInstance();
+```
 
-#### 列出源
+#### 1. 导入书源
 
-| 方法 | 说明 |
-|------|------|
-| `listAllSources()` | 所有已注册的书源 |
-| `listNovelSources()` | 小说源（type=0） |
-| `listComicSources()` | 漫画源（type=2） |
-| `getSource(String url)` | 按URL获取书源 |
-| `getSourceCount()` | 书源总数 |
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `importSources(String json)` | 书源 JSON 字符串 | 导入单个或数组格式 |
+| `importSources(InputStream is)` | 输入流 | 从文件导入 |
+| `removeSource(String sourceUrl)` | 书源 URL | 移除指定源 |
+| `clearAllSources()` | — | 清除所有源 |
+| `reloadBuiltinSources()` | — | 重新加载内置源 |
 
-#### 搜索
+#### 2. 列出书源
 
-| 方法 | 说明 |
-|------|------|
-| `searchNovel(String key)` | 跨所有小说源聚合搜索 |
-| `searchNovel(String key, int page)` | 聚合搜索指定页 |
-| `searchComic(String key)` | 跨所有漫画源聚合搜索 |
-| `searchComic(String key, int page)` | 漫画聚合搜索指定页 |
-| `searchAll(String key)` | 跨所有源搜索（小说+漫画） |
-| `searchAll(String key, int page)` | 全源搜索指定页 |
-| `search(BookSource source, String key)` | 在指定源中搜索 |
+| 方法 | 返回值 | 说明 |
+|------|--------|------|
+| `getSourceCount()` | `int` | 书源总数 |
+| `listSourceNames()` | `List<String>` | 所有源名称 |
+| `listNovelSourceNames()` | `List<String>` | 小说源名称 |
+| `listComicSourceNames()` | `List<String>` | 漫画源名称 |
+| `listAllSources()` | `List<Map<String, Object>>` | 所有源详情 (name, url, type, typeDesc) |
 
-#### 按作者搜索
+#### 3. 搜索
 
-| 方法 | 说明 |
-|------|------|
-| `searchNovelByAuthor(String author)` | 按作者搜索小说 |
-| `searchComicByAuthor(String author)` | 按作者搜索漫画 |
-| `searchAllByAuthor(String author)` | 按作者搜索全部源 |
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `search(String keyword)` | 关键词 | 跨所有源搜索 |
+| `search(String keyword, int page)` | 关键词, 页码 | 指定页码 |
+| `searchNovel(String keyword)` | 关键词 | 仅搜索小说源 |
+| `searchNovel(String keyword, int page)` | 关键词, 页码 | 小说源指定页 |
+| `searchComic(String keyword)` | 关键词 | 仅搜索漫画源 |
+| `searchComic(String keyword, int page)` | 关键词, 页码 | 漫画源指定页 |
 
-#### 详情 / 目录 / 正文
+返回 `List<SearchResult>`，每个结果包含：
 
-| 方法 | 说明 |
-|------|------|
-| `getBookInfo(SearchBook sb)` | 从搜索结果获取详情 |
-| `getBookInfo(Book book)` | 刷新已有 Book 详情 |
-| `getBookInfo(String sourceUrl, String bookUrl)` | 指定源获取详情 |
-| `getChapterList(Book book)` | 获取章节目录 |
-| `getBookContent(Book book, BookChapter chapter)` | 获取章节正文 |
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `name` | String | 书名 |
+| `author` | String | 作者 |
+| `bookUrl` | String | 书籍 URL（后续操作需要） |
+| `sourceUrl` | String | 书源 URL（后续操作需要） |
+| `sourceName` | String | 书源名称 |
+| `coverUrl` | String | 封面 URL |
+| `intro` | String | 简介 |
+| `kind` | String | 分类 |
+| `wordCount` | String | 字数 |
+| `type` | int | 0=小说, 2=漫画 |
 
-#### 批量下载
+#### 4. 按作者搜索
 
-| 方法 | 说明 |
-|------|------|
-| `batchDownloadContent(Book, List<BookChapter>)` | 批量下载，返回 `List<String>` |
-| `batchDownloadContent(Book, List<BookChapter>, long delayMs)` | 带间隔延迟 |
-| `batchDownloadContentAsMap(Book, List<BookChapter>)` | 返回 `Map<标题, 正文>` |
-| `batchDownloadContentAsString(Book, List<BookChapter>, String sep)` | 拼接为完整文本 |
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `searchByAuthor(String author)` | 作者名 | 跨所有源 |
+| `searchNovelByAuthor(String author)` | 作者名 | 仅小说源 |
+| `searchComicByAuthor(String author)` | 作者名 | 仅漫画源 |
+
+返回 `List<SearchResult>`，自动过滤匹配作者的结果。
+
+#### 5. 获取详情
+
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `getBookDetail(String bookUrl, String sourceUrl)` | 书籍URL, 书源URL | 获取书籍详情 |
+
+返回 `BookDetail`，包含：name, author, bookUrl, tocUrl, sourceUrl, sourceName, coverUrl, intro, kind, wordCount, latestChapterTitle, type。
+
+#### 6. 获取目录
+
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `getChapterList(String bookUrl, String sourceUrl)` | 书籍URL, 书源URL | 获取章节列表 |
+
+返回 `List<ChapterInfo>`，每个章节包含：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `title` | String | 章节标题 |
+| `url` | String | 章节 URL |
+| `index` | int | 章节序号（从 0 开始） |
+
+#### 7. 获取正文
+
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `getContent(bookUrl, sourceUrl, chapterIndex)` | 书籍URL, 书源URL, 章节序号 | 按序号获取正文 |
+| `getContentByUrl(bookUrl, sourceUrl, chapterUrl)` | 书籍URL, 书源URL, 章节URL | 按URL获取正文 |
+
+返回 `String` 正文内容（漫画为图片 HTML）。
+
+#### 8. 批量下载
+
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `batchDownload(bookUrl, sourceUrl, start, end)` | 书籍URL, 书源URL, 起始序号, 结束序号(不含) | 下载范围 |
+| `batchDownload(bookUrl, sourceUrl, start, end, delayMs)` | 同上+间隔毫秒 | 带延迟 |
+| `batchDownloadAll(bookUrl, sourceUrl)` | 书籍URL, 书源URL | 下载全部 |
+| `batchDownloadAsMap(bookUrl, sourceUrl, start, end)` | 同上 | 返回 `Map<标题, 正文>` |
+| `batchDownloadAsString(bookUrl, sourceUrl, start, end, sep)` | 同上+分隔符 | 拼接为完整文本 |
+
+返回 `List<String>`（`batchDownloadAsMap` 返回 `Map<String,String>`，`batchDownloadAsString` 返回 `String`）。
 
 ### ReaderEngine（底层 API）
 
-提供书源解析、初始化、搜索、详情、目录、正文的静态方法。
+如果需要直接操作书源对象，可使用底层 API：
 
 | 方法 | 说明 |
 |------|------|
 | `parseBookSource(String json)` | 解析单个书源 |
 | `parseBookSources(String json)` | 解析书源列表 |
-| `parseBookSources(InputStream is)` | 从流解析书源列表 |
-| `initSource(BookSource source)` | 初始化书源（漫画源必须） |
+| `initSource(BookSource source)` | 初始化书源 |
 | `search(BookSource, String key, Integer page)` | 搜索 |
-| `explore(BookSource, String url, Integer page)` | 发现 |
 | `getBookInfo(BookSource, String bookUrl)` | 获取详情 |
 | `getChapterList(BookSource, Book book)` | 获取目录 |
 | `getBookContent(BookSource, Book, BookChapter)` | 获取正文 |
-| `setVariable(BookSource, String variable)` | 设置 variable |
-| `getVariable(BookSource)` | 获取 variable |
-| `evalJS(BookSource, String jsStr)` | 执行 JS 代码 |
 
 ## 使用示例
 
@@ -232,27 +234,31 @@ String content = ReaderEngine.getBookContent(source, book, chapters.get(0));
 BookSourceManager manager = BookSourceManager.getInstance();
 
 // 1. 搜索
-List<SearchBook> results = manager.searchNovel("斗破苍穹");
+List<SearchResult> results = manager.searchNovel("斗破苍穹");
 System.out.println("搜索结果: " + results.size() + " 本");
 
-// 2. 详情
-Book book = manager.getBookInfo(results.get(0));
-System.out.println("书名: " + book.getName());
-System.out.println("简介: " + book.getIntro());
+// 2. 取第一本
+SearchResult r = results.get(0);
+System.out.println("书名: " + r.getName() + " | 作者: " + r.getAuthor());
 
-// 3. 目录
-List<BookChapter> chapters = manager.getChapterList(book);
+// 3. 获取详情
+BookDetail detail = manager.getBookDetail(r.getBookUrl(), r.getSourceUrl());
+System.out.println("简介: " + detail.getIntro());
+
+// 4. 获取目录
+List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSourceUrl());
 System.out.println("章节数: " + chapters.size());
 
-// 4. 批量下载前 5 章
-List<String> contents = manager.batchDownloadContent(book, chapters.subList(0, 5));
-for (int i = 0; i < contents.size(); i++) {
-    System.out.println("第" + (i+1) + "章: " + contents.get(i).length() + " 字");
-}
+// 5. 获取第 1 章正文
+String content = manager.getContent(r.getBookUrl(), r.getSourceUrl(), 0);
+System.out.println("正文长度: " + content.length());
 
-// 5. 下载为完整文本
-String fullText = manager.batchDownloadContentAsString(
-    book, chapters.subList(0, 10), "\n\n"
+// 6. 批量下载前 10 章
+List<String> contents = manager.batchDownload(r.getBookUrl(), r.getSourceUrl(), 0, 10);
+
+// 7. 下载为完整文本
+String fullText = manager.batchDownloadAsString(
+    r.getBookUrl(), r.getSourceUrl(), 0, 10, "\n\n"
 );
 ```
 
@@ -262,16 +268,16 @@ String fullText = manager.batchDownloadContentAsString(
 BookSourceManager manager = BookSourceManager.getInstance();
 
 // 搜索漫画
-List<SearchBook> results = manager.searchComic("哑舍");
+List<SearchResult> results = manager.searchComic("哑舍");
 
-// 获取详情
-Book book = manager.getBookInfo(results.get(0));
+SearchResult r = results.get(0);
+System.out.println("漫画: " + r.getName());
 
 // 获取目录
-List<BookChapter> chapters = manager.getChapterList(book);
+List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSourceUrl());
 
-// 获取正文（漫画正文为图片 HTML）
-String content = manager.getBookContent(book, chapters.get(0));
+// 获取第 1 章正文（图片 HTML）
+String content = manager.getContent(r.getBookUrl(), r.getSourceUrl(), 0);
 int imgCount = content.split("<img").length - 1;
 System.out.println("图片数: " + imgCount);
 ```
@@ -281,10 +287,9 @@ System.out.println("图片数: " + imgCount);
 ```java
 BookSourceManager manager = BookSourceManager.getInstance();
 
-// 按作者搜索小说
-List<SearchBook> results = manager.searchNovelByAuthor("天蚕土豆");
-for (SearchBook sb : results) {
-    System.out.println(sb.getName() + " - " + sb.getAuthor());
+List<SearchResult> results = manager.searchNovelByAuthor("天蚕土豆");
+for (SearchResult r : results) {
+    System.out.println(r.getName() + " - " + r.getAuthor());
 }
 ```
 
@@ -295,28 +300,23 @@ BookSourceManager manager = BookSourceManager.getInstance();
 
 // 从 JSON 字符串导入
 String json = "[{\"bookSourceName\":\"新源\", \"bookSourceUrl\":\"https://...\", ...}]";
-List<BookSource> imported = manager.importSources(json);
+int count = manager.importSources(json);
+System.out.println("导入了 " + count + " 个源");
 
 // 从文件导入
 try (InputStream is = new FileInputStream("my_source.json")) {
     manager.importSources(is);
 }
 
-// 列出所有源（内置 + 导入的）
-List<BookSource> all = manager.listAllSources();
+// 列出所有源
+for (Map<String, Object> source : manager.listAllSources()) {
+    System.out.println(source.get("name") + " | " + source.get("typeDesc"));
+}
 ```
 
 ### Spring Boot 集成
 
-引入依赖后，Spring Boot 会自动加载 `ReaderEngineAutoConfiguration`，预热 JS 引擎和 HTTP 客户端：
-
-```yaml
-# application.yml（可选配置）
-logging:
-  level:
-    io.legado.app: DEBUG
-    cn.kong.app: INFO
-```
+引入依赖后自动生效，`ReaderEngineAutoConfiguration` 会在启动时预热 JS 引擎和 HTTP 客户端。
 
 ```java
 @Service
@@ -324,12 +324,12 @@ public class BookService {
 
     private final BookSourceManager manager = BookSourceManager.getInstance();
 
-    public List<SearchBook> search(String keyword) {
+    public List<SearchResult> search(String keyword) {
         return manager.searchNovel(keyword);
     }
 
-    public String downloadChapter(String bookUrl, int chapterIndex) {
-        // 实现逻辑...
+    public String downloadChapter(String bookUrl, String sourceUrl, int chapterIndex) {
+        return manager.getContent(bookUrl, sourceUrl, chapterIndex);
     }
 }
 ```
@@ -338,62 +338,53 @@ public class BookService {
 
 ```
 reader-engine/
-├── pom.xml                          # Maven 构建配置
+├── pom.xml
 ├── src/
 │   ├── main/
 │   │   ├── java/
-│   │   │   └── cn/kong/app/
-│   │   │       ├── ReaderEngineAutoConfiguration.java   # Spring Boot 自动配置
-│   │   │       └── engine/
-│   │   │           ├── ReaderEngine.java                # Java 门面 (底层 API)
-│   │   │           └── BookSourceManager.java           # 书源管理器 (高层 API)
-│   │   ├── kotlin/
-│   │   │   └── io/legado/app/
-│   │   │       ├── data/entities/                       # 实体类 (Book, BookSource, ...)
-│   │   │       ├── engine/
-│   │   │       │   └── ReaderEngineBridge.kt            # Kotlin→Java 桥接
-│   │   │       ├── model/
-│   │   │       │   ├── analyzeRule/                    # 解析规则 (Jsoup/XPath/JsonPath)
-│   │   │       │   └── webBook/                        # WebBook 核心逻辑
-│   │   │       ├── help/                               # 工具 (JsExtensions, CacheManager, ...)
-│   │   │       └── utils/                               # 工具类
+│   │   │   ├── cn/kong/app/
+│   │   │   │   ├── ReaderEngineAutoConfiguration.java   # Spring Boot 自动配置
+│   │   │   │   └── engine/
+│   │   │   │       ├── ReaderEngine.java                # 底层 API (直接操作书源对象)
+│   │   │   │       ├── BookSourceManager.java           # 高层 API (通用方法，推荐使用)
+│   │   │   │       └── dto/                             # 通用 DTO
+│   │   │   │           ├── SearchResult.java            #   搜索结果
+│   │   │   │           ├── BookDetail.java              #   书籍详情
+│   │   │   │           └── ChapterInfo.java            #   章节信息
+│   │   │   └── io/legado/app/                           # Java 工具类
+│   │   │       ├── model/analyzeRule/QueryTTF.java     #   TTF 字体解析
+│   │   │       └── utils/                               #   Base64, TextUtils 等
+│   │   ├── kotlin/io/legado/app/
+│   │   │   ├── constant/                                # 常量定义
+│   │   │   ├── data/entities/                            # 实体类 (Book, BookSource, ...)
+│   │   │   │   └── rule/                                 #   解析规则实体
+│   │   │   ├── engine/ReaderEngineBridge.kt              # Kotlin→Java 桥接
+│   │   │   ├── exception/                               # 异常定义
+│   │   │   ├── help/                                    # 工具 (JsExtensions, CacheManager, HTTP)
+│   │   │   ├── init/                                    # 初始化
+│   │   │   ├── model/
+│   │   │   │   ├── analyzeRule/                        # 解析规则 (Jsoup/XPath/JsonPath)
+│   │   │   │   └── webBook/                            # WebBook 核心逻辑
+│   │   │   └── utils/                                  # 工具类
 │   │   └── resources/
 │   │       ├── META-INF/spring.factories               # Spring Boot 自动配置注册
-│   │       └── builtin/                                # 内置书源 JSON
-│   │           ├── novel_80.json
-│   │           ├── novel_dubu.json
-│   │           ├── novel_maoyan.json
-│   │           ├── novel_qimao.json
-│   │           ├── comic_godamanga.json
-│   │           ├── comic_manhuatai.json
-│   │           ├── comic_rumanhua.json
-│   │           └── comic_zaimanhua.json
+│   │       └── builtin/                                # 内置书源 JSON (8 个)
 │   └── test/
-│       ├── java/cn/kong/app/
-│       │   ├── engine/BookSourceManagerTest.java        # 管理器测试
-│       │   └── model/
-│       │       ├── NovelSourceTest.java                 # 小说源测试
-│       │       └── ComicSourceTest.java                 # 漫画源测试
-│       └── resources/                                   # 测试书源 JSON
+│       └── java/cn/kong/app/
+│           ├── engine/BookSourceManagerTest.java        # 管理器测试 (10 个)
+│           └── model/
+│               ├── NovelSourceTest.java                 # 小说源测试
+│               └── ComicSourceTest.java                 # 漫画源测试
 ```
 
 ## 架构说明
-
-### 编译流程
-
-```
-Kotlin 编译器 (process-sources 阶段)
-    ↓ 编译 src/main/kotlin → target/classes
-Java 编译器 (compile 阶段)
-    ↓ 编译 src/main/java → target/classes
-    ↓ (依赖 Kotlin 编译产物)
-最终 JAR 包
-```
 
 ### 调用链
 
 ```
 Java 调用方
+    ↓  (String 参数 + 通用 DTO)
+BookSourceManager.java (单例，源管理 + 聚合搜索)
     ↓
 ReaderEngine.java (静态方法)
     ↓
@@ -408,13 +399,15 @@ Rhino JS 引擎 (执行书源 JS 规则)
 
 ### 关键设计
 
-1. **Kotlin 协程桥接**：Kotlin 的 `WebBook.kt` 使用 `suspend` 函数，Java 无法直接调用。`ReaderEngineBridge.kt` 通过 `runBlocking` 桥接为同步方法。
+1. **通用 DTO**：用户不接触 `SearchBook`/`Book`/`BookChapter` 等内部对象，统一使用 `SearchResult`/`BookDetail`/`ChapterInfo` 和 `String`/`int` 参数。
 
-2. **jsLib 预加载**：书源可定义 `jsLib`（自定义 JS 函数库），在 `BaseSource.evalJS` 中自动拼接到用户 JS 前面执行，解决 Map 函数覆盖 ES6 Map 构造器的问题。
+2. **Book 缓存**：`BookSourceManager` 内部缓存 Book 对象（`sourceUrl + bookUrl` 为 key），避免获取目录和正文时重复请求详情页。
 
-3. **漫画源 variable 初始化**：漫画源依赖 `variable` 存储 URL、cookie 等配置。`initSource()` 执行 `loginUrl` 中的 JS 代码自动设置 variable。
+3. **Kotlin 协程桥接**：Kotlin 的 `WebBook.kt` 使用 `suspend` 函数，通过 `ReaderEngineBridge.kt` 的 `runBlocking` 桥接为同步方法。
 
-4. **AES 加密兼容**：Java 不支持 `PKCS7Padding`，引擎在 `EncoderUtils.kt` 中自动替换为 `PKCS5Padding`。
+4. **jsLib 预加载**：书源可定义 `jsLib`，在 `BaseSource.evalJS` 中自动拼接到用户 JS 前执行。
+
+5. **漫画源 variable 初始化**：漫画源依赖 `variable` 存储 URL、cookie 等，加载时自动执行 `initSource()` 初始化。
 
 ## 构建
 
@@ -422,12 +415,11 @@ Rhino JS 引擎 (执行书源 JS 规则)
 
 - JDK 11+
 - Maven 3.6+
-- Kotlin 1.8 (由 Maven 插件自动管理)
 
 ### 编译打包
 
 ```bash
-# 跳过测试打包
+# 打包（跳过测试）
 mvn package -DskipTests
 
 # 运行测试
@@ -437,19 +429,9 @@ mvn test
 mvn test -Dtest="cn.kong.app.engine.BookSourceManagerTest"
 ```
 
-构建产物：`target/reader-engine-1.0.0.jar`（约 600KB）
+构建产物：`target/reader-engine-1.0.0.jar`
 
 ## 测试
-
-### 测试覆盖
-
-| 测试类 | 测试内容 |
-|--------|----------|
-| `BookSourceManagerTest` | 管理器全流程（10 个测试） |
-| `NovelSourceTest` | 4 小说源 × 5 关键词 |
-| `ComicSourceTest` | 4 漫画源 × 5 关键词 |
-
-### 测试结果
 
 | 测试项 | 结果 |
 |--------|------|
@@ -457,44 +439,40 @@ mvn test -Dtest="cn.kong.app.engine.BookSourceManagerTest"
 | 搜索小说（斗破苍穹） | 128 本（4 源聚合） |
 | 搜索漫画（哑舍） | 35 本（4 源聚合） |
 | 搜索全部（斗破苍穹） | 186 本（8 源聚合） |
-| 详情 → 目录 → 正文 | 全流程通过 |
+| 按作者搜索（天蚕土豆） | 通过 |
+| 获取详情 | 通过 |
+| 获取目录 | 通过 |
+| 获取正文 | 通过 |
 | 批量下载（3 章） | 通过 |
+| 漫画完整流程 | 通过 |
 
 ## FAQ
 
-### Q: 漫画源搜索报错怎么办？
+### Q: 漫画源搜索报错？
 
-漫画源必须先调用 `initSource()` 初始化 variable。使用 `BookSourceManager` 时会自动处理，使用 `ReaderEngine` 时需手动调用：
+漫画源在 `BookSourceManager` 加载时自动调用 `initSource()` 初始化 variable。如果使用底层 `ReaderEngine`，需手动调用：
 
 ```java
-ReaderEngine.initSource(source);  // 必须在搜索前调用
+ReaderEngine.initSource(source);
 ```
 
 ### Q: 如何添加自定义书源？
 
 ```java
-// 方式 1: JSON 字符串
 manager.importSources(jsonString);
-
-// 方式 2: 文件流
+// 或
 manager.importSources(new FileInputStream("source.json"));
 ```
 
-书源 JSON 格式参考 [阅读 App 书源格式](https://github.com/gedoor/legado)。
-
 ### Q: 打包时 rhino 依赖找不到？
 
-`rhino-android` 是定制版，需安装到本地仓库：
-
 ```bash
-mvn install:install-file -Dfile=lib/rhino-1.7.13-1.jar \
-  -DgroupId=com.github.gedoor -DartifactId=rhino-android \
-  -Dversion=1.7.13-1 -Dpackaging=jar
+mvn install:install-file "-Dfile=lib/rhino-1.7.13-1.jar" "-DgroupId=com.github.gedoor" "-DartifactId=rhino-android" "-Dversion=1.7.13-1" "-Dpackaging=jar"
 ```
 
 ### Q: Spring Boot 项目中如何使用？
 
-引入依赖后自动生效。`ReaderEngineAutoConfiguration` 会在启动时预热 JS 引擎和 HTTP 客户端。如需禁用自动配置：
+引入依赖后自动生效。如需禁用：
 
 ```java
 @SpringBootApplication(exclude = ReaderEngineAutoConfiguration.class)
