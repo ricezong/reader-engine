@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -50,7 +51,7 @@ public class ComicSourceTest {
     private BookSource loadSource(String resource) throws Exception {
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(resource)) {
             assertNotNull(is, "书源文件未找到: " + resource);
-            String json = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            String json = readAllBytes(is);
             List<BookSource> sources = ReaderEngine.parseBookSources(json);
             assertNotNull(sources, "书源解析失败: " + resource);
             assertTrue(!sources.isEmpty(), "书源列表为空: " + resource);
@@ -165,5 +166,18 @@ public class ComicSourceTest {
             log.info("  图片数: {}", imgCount);
             log.info("  正文前200字符: {}", content.substring(0, Math.min(200, contentLen)));
         }
+    }
+
+    /**
+     * Java 8 兼容的 readAllBytes 实现
+     */
+    private static String readAllBytes(InputStream is) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        byte[] buf = new byte[4096];
+        int n;
+        while ((n = is.read(buf)) != -1) {
+            bos.write(buf, 0, n);
+        }
+        return new String(bos.toByteArray(), StandardCharsets.UTF_8);
     }
 }

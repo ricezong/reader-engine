@@ -42,15 +42,16 @@ object ReaderEngineBridge {
      * 执行 loginUrl 中的 JS 代码, 初始化 variable 等配置.
      * 漫画源必须调用此方法, 否则 Get('url') 等函数会返回 null.
      *
+     * 每次调用都会重新执行 login JS, 刷新 token/cookie 等变量,
+     * 防止过期导致后续请求失败.
+     *
      * @param bookSource 书源对象
      * @return 初始化后的书源对象 (variable 已设置)
      */
     @JvmStatic
     fun initSource(bookSource: BookSource): BookSource {
-        // 如果已有 variable, 不重复初始化
-        if (!bookSource.getVariable().isNullOrEmpty()) {
-            return bookSource
-        }
+        // 先清除旧 variable, 确保重新执行 login JS 获取最新 token/cookie
+        bookSource.setVariable(null)
         // 执行 loginUrl 中的 JS, 这会调用 source.setVariable() 设置默认 variable
         bookSource.login()
         return bookSource

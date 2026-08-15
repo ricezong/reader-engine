@@ -10,10 +10,13 @@ import io.legado.app.data.entities.BookChapter;
 import io.legado.app.data.entities.BookSource;
 import io.legado.app.data.entities.SearchBook;
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -246,7 +249,7 @@ public class ReaderService {
     public List<SearchResult> search(String keyword, String source, int page) {
         BookSource src = resolveSource(source);
         ensureSourceReady(src);
-        return doSearch(List.of(src), keyword, page);
+        return doSearch(Collections.singletonList(src), keyword, page);
     }
 
     // ==================== 3. 按作者搜索 ====================
@@ -509,13 +512,11 @@ public class ReaderService {
     /**
      * 确保书源就绪：每次请求前重新初始化 variable，
      * 防止 token/cookie 过期导致 JS 执行失败。
-     * 仅对有 loginUrl 的书源生效。
+     * initSource 内部会先清除旧 variable 再重新执行 login JS。
      */
     private void ensureSourceReady(BookSource src) {
         synchronized (src) {
             try {
-                // 清除旧 variable，强制重新执行 login JS
-                src.setVariable(null);
                 ReaderEngine.initSource(src);
             } catch (Exception e) {
                 log.warn("书源 [{}] 重新初始化失败，将使用旧状态继续: {}", src.getBookSourceName(), e.getMessage());
@@ -609,7 +610,7 @@ public class ReaderService {
      * 根据书源 URL 查找简称
      */
     private String findAlias(String sourceUrl) {
-        for (var entry : aliasMap.entrySet()) {
+        for (Map.Entry<String, String> entry : aliasMap.entrySet()) {
             if (entry.getValue().equals(sourceUrl)) {
                 return entry.getKey();
             }
@@ -679,12 +680,25 @@ public class ReaderService {
                 log.warn("内置源文件不存在: {}", filename);
                 return null;
             }
-            String json = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            String json = readAllBytes(is);
             List<BookSource> sources = ReaderEngine.parseBookSources(json);
             if (sources != null && !sources.isEmpty()) {
                 return sources.get(0);
             }
             return ReaderEngine.parseBookSource(json);
         }
+    }
+
+    /**
+     * Java 8 兼容的 readAllBytes 实现
+     */
+    private static String readAllBytes(InputStream is) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        byte[] buf = new byte[4096];
+        int n;
+        while ((n = is.read(buf)) != -1) {
+            bos.write(buf, 0, n);
+        }
+        return new String(bos.toByteArray(), StandardCharsets.UTF_8);
     }
 }

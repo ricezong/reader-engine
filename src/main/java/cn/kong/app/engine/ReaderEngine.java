@@ -6,7 +6,6 @@ import io.legado.app.data.entities.BookSource;
 import io.legado.app.data.entities.SearchBook;
 import io.legado.app.engine.ReaderEngineBridge;
 
-import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -69,21 +68,6 @@ public class ReaderEngine {
         return ReaderEngineBridge.parseBookSources(json);
     }
 
-    /**
-     * 从输入流解析书源列表
-     *
-     * @param inputStream 书源 JSON 输入流
-     * @return BookSource 列表
-     * @throws IllegalArgumentException 如果 JSON 格式错误
-     */
-    public static List<BookSource> parseBookSources(InputStream inputStream) {
-        try {
-            String json = new String(inputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-            return ReaderEngineBridge.parseBookSources(json);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("解析书源失败", e);
-        }
-    }
 
     // ==================== 书源初始化 ====================
 
