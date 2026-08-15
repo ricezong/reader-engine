@@ -13,8 +13,8 @@ public class SearchResult {
     private String author;
     /** 书籍详情页 URL（获取详情、目录、正文时需要传入） */
     private String bookUrl;
-    /** 书源 URL（标识来自哪个源） */
-    private String sourceUrl;
+    /** 书源简称（如 80、dubu、godamanga 等，获取详情/目录/正文时传入） */
+    private String source;
     /** 书源名称 */
     private String sourceName;
     /** 封面 URL */
@@ -32,14 +32,6 @@ public class SearchResult {
 
     public SearchResult() {}
 
-    public SearchResult(String name, String author, String bookUrl, String sourceUrl, String sourceName) {
-        this.name = name;
-        this.author = author;
-        this.bookUrl = bookUrl;
-        this.sourceUrl = sourceUrl;
-        this.sourceName = sourceName;
-    }
-
     // Getters & Setters
 
     public String getName() { return name; }
@@ -51,8 +43,8 @@ public class SearchResult {
     public String getBookUrl() { return bookUrl; }
     public void setBookUrl(String bookUrl) { this.bookUrl = bookUrl; }
 
-    public String getSourceUrl() { return sourceUrl; }
-    public void setSourceUrl(String sourceUrl) { this.sourceUrl = sourceUrl; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
 
     public String getSourceName() { return sourceName; }
     public void setSourceName(String sourceName) { this.sourceName = sourceName; }
@@ -81,7 +73,7 @@ public class SearchResult {
                 "name='" + name + '\'' +
                 ", author='" + author + '\'' +
                 ", bookUrl='" + bookUrl + '\'' +
-                ", sourceName='" + sourceName + '\'' +
+                ", source='" + source + '\'' +
                 '}';
     }
 }

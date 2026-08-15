@@ -11,6 +11,7 @@ import io.legado.app.data.entities.SearchBook;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,35 +20,40 @@ import java.util.concurrent.ConcurrentHashMap;
  * BookSourceManager - 书源管理器（通用 API）
  * <p>
  * 用户不需要接触 SearchBook / Book / BookChapter 等内部对象，
- * 只需传入简单参数（关键词、URL、序号）即可完成全部操作。
+ * 只需传入简单参数（关键词、URL、source 简称、序号）即可完成全部操作。
  *
  * <h3>API 总览</h3>
  * <pre>
  * BookSourceManager manager = BookSourceManager.getInstance();
  *
- * // 1. 导入书源
- * manager.importSources(jsonString);
+ * // 1. 列出书源
+ * List&lt;Map&lt;String, Object&gt;&gt; all = manager.listAllSources();
+ * List&lt;Map&lt;String, Object&gt;&gt; novels = manager.listNovelSources();
+ * List&lt;Map&lt;String, Object&gt;&gt; comics = manager.listComicSources();
  *
- * // 2. 列出源
- * List&lt;String&gt; sources = manager.listSourceNames();
- *
- * // 3. 搜索
+ * // 2. 搜索
  * List&lt;SearchResult&gt; results = manager.search("斗破苍穹");
  *
- * // 4. 按作者搜索
+ * // 3. 按作者搜索
  * List&lt;SearchResult&gt; results = manager.searchByAuthor("天蚕土豆");
  *
- * // 5. 获取详情
- * BookDetail detail = manager.getBookDetail(bookUrl, sourceUrl);
+ * // 4. 获取详情（source 从 SearchResult.getSource() 获取）
+ * BookDetail detail = manager.getBookDetail(bookUrl, source);
  *
- * // 6. 获取目录
- * List&lt;ChapterInfo&gt; chapters = manager.getChapterList(bookUrl, sourceUrl);
+ * // 5. 获取目录
+ * List&lt;ChapterInfo&gt; chapters = manager.getChapterList(bookUrl, source);
  *
- * // 7. 获取正文（按章节序号）
- * String content = manager.getContent(bookUrl, sourceUrl, 0);
+ * // 6. 获取正文（按章节序号）
+ * String content = manager.getContent(bookUrl, source, 0);
  *
- * // 8. 批量下载正文
- * List&lt;String&gt; contents = manager.batchDownload(bookUrl, sourceUrl, 0, 10);
+ * // 7. 批量下载正文
+ * List&lt;String&gt; contents = manager.batchDownload(bookUrl, source, 0, 10);
+ * </pre>
+ *
+ * <h3>内置书源简称</h3>
+ * <pre>
+ * 小说源：80 / dubu / maoyan / qimao
+ * 漫画源：godamanga / manhuatai / rumanhua / zaimanhua
  * </pre>
  */
 public class BookSourceManager {
@@ -56,6 +62,7 @@ public class BookSourceManager {
 
     private static final String BUILTIN_DIR = "/builtin/";
 
+    /** 内置源文件名（前缀即简称） */
     private static final String[] BUILTIN_NOVEL_FILES = {
             "novel_80.json",
             "novel_dubu.json",
@@ -75,8 +82,15 @@ public class BookSourceManager {
 
     private static volatile BookSourceManager instance;
 
-    /** 书源存储 */
+    /**
+     * 书源存储：key = bookSourceUrl, value = BookSource
+     */
     private final ConcurrentHashMap<String, BookSource> sourceMap = new ConcurrentHashMap<>();
+
+    /**
+     * 书源简称映射：key = 简称(如 80), value = bookSourceUrl
+     */
+    private final ConcurrentHashMap<String, String> aliasMap = new ConcurrentHashMap<>();
 
     /**
      * Book 对象缓存，避免重复请求详情。
@@ -99,149 +113,52 @@ public class BookSourceManager {
         return instance;
     }
 
-    // ==================== 1. 导入书源 ====================
+    // ==================== 1. 列出书源 ====================
 
     /**
-     * 从 JSON 字符串导入书源（支持单个或数组格式）
+     * 列出所有书源
      *
-     * @param json 书源 JSON 字符串
-     * @return 导入的书源数量
-     */
-    public int importSources(String json) {
-        List<BookSource> sources;
-        try {
-            sources = ReaderEngine.parseBookSources(json);
-        } catch (Exception e) {
-            try {
-                BookSource source = ReaderEngine.parseBookSource(json);
-                sources = new ArrayList<>();
-                sources.add(source);
-            } catch (Exception e2) {
-                throw new IllegalArgumentException("解析书源 JSON 失败", e2);
-            }
-        }
-        for (BookSource source : sources) {
-            ReaderEngine.initSource(source);
-            sourceMap.put(source.getBookSourceUrl(), source);
-            log.info("导入书源: {} ({})", source.getBookSourceName(), source.getBookSourceUrl());
-        }
-        return sources.size();
-    }
-
-    /**
-     * 从输入流导入书源
-     *
-     * @param inputStream 书源 JSON 输入流
-     * @return 导入的书源数量
-     */
-    public int importSources(InputStream inputStream) {
-        try {
-            String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-            return importSources(json);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("读取书源流失败", e);
-        }
-    }
-
-    /**
-     * 移除指定书源
-     *
-     * @param sourceUrl 书源 URL
-     */
-    public void removeSource(String sourceUrl) {
-        sourceMap.remove(sourceUrl);
-        log.info("移除书源: {}", sourceUrl);
-    }
-
-    /**
-     * 清除所有书源
-     */
-    public void clearAllSources() {
-        sourceMap.clear();
-        bookCache.clear();
-        log.info("已清除所有书源");
-    }
-
-    /**
-     * 重新加载内置源
-     */
-    public void reloadBuiltinSources() {
-        loadBuiltinSources();
-    }
-
-    // ==================== 2. 列出书源 ====================
-
-    /**
-     * 获取书源数量
-     *
-     * @return 书源总数
-     */
-    public int getSourceCount() {
-        return sourceMap.size();
-    }
-
-    /**
-     * 列出所有书源名称
-     *
-     * @return 书源名称列表
-     */
-    public List<String> listSourceNames() {
-        List<String> names = new ArrayList<>();
-        for (BookSource s : sourceMap.values()) {
-            names.add(s.getBookSourceName());
-        }
-        return names;
-    }
-
-    /**
-     * 列出所有小说源名称
-     *
-     * @return 小说源名称列表
-     */
-    public List<String> listNovelSourceNames() {
-        List<String> names = new ArrayList<>();
-        for (BookSource s : sourceMap.values()) {
-            if (s.getBookSourceType() == TYPE_NOVEL) {
-                names.add(s.getBookSourceName());
-            }
-        }
-        return names;
-    }
-
-    /**
-     * 列出所有漫画源名称
-     *
-     * @return 漫画源名称列表
-     */
-    public List<String> listComicSourceNames() {
-        List<String> names = new ArrayList<>();
-        for (BookSource s : sourceMap.values()) {
-            if (s.getBookSourceType() == TYPE_COMIC) {
-                names.add(s.getBookSourceName());
-            }
-        }
-        return names;
-    }
-
-    /**
-     * 列出所有书源信息
-     *
-     * @return 书源信息列表（Map: name, url, type）
+     * @return 书源列表，每项包含：source(简称), name(名称), type(类型), typeDesc(类型描述)
      */
     public List<Map<String, Object>> listAllSources() {
         List<Map<String, Object>> list = new ArrayList<>();
         for (BookSource s : sourceMap.values()) {
-            Map<String, Object> info = new java.util.LinkedHashMap<>();
-            info.put("name", s.getBookSourceName());
-            info.put("url", s.getBookSourceUrl());
-            info.put("type", s.getBookSourceType());
-            info.put("typeDesc", s.getBookSourceType() == TYPE_NOVEL ? "小说" : "漫画");
-            list.add(info);
+            list.add(toSourceInfo(s));
         }
         return list;
     }
 
-    // ==================== 3. 搜索 ====================
+    /**
+     * 列出所有小说源
+     *
+     * @return 小说源列表
+     */
+    public List<Map<String, Object>> listNovelSources() {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (BookSource s : sourceMap.values()) {
+            if (s.getBookSourceType() == TYPE_NOVEL) {
+                list.add(toSourceInfo(s));
+            }
+        }
+        return list;
+    }
+
+    /**
+     * 列出所有漫画源
+     *
+     * @return 漫画源列表
+     */
+    public List<Map<String, Object>> listComicSources() {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (BookSource s : sourceMap.values()) {
+            if (s.getBookSourceType() == TYPE_COMIC) {
+                list.add(toSourceInfo(s));
+            }
+        }
+        return list;
+    }
+
+    // ==================== 2. 搜索 ====================
 
     /**
      * 搜索（跨所有源：小说 + 漫画）
@@ -310,7 +227,7 @@ public class BookSourceManager {
         return doSearch(comics, keyword, page);
     }
 
-    // ==================== 4. 按作者搜索 ====================
+    // ==================== 3. 按作者搜索 ====================
 
     /**
      * 按作者搜索（跨所有源）
@@ -361,41 +278,35 @@ public class BookSourceManager {
         return doSearchByAuthor(comics, author, 1);
     }
 
-    // ==================== 5. 获取详情 ====================
+    // ==================== 4. 获取详情 ====================
 
     /**
      * 获取书籍详情
      *
-     * @param bookUrl   书籍 URL（从搜索结果 SearchResult.getBookUrl() 获取）
-     * @param sourceUrl 书源 URL（从搜索结果 SearchResult.getSourceUrl() 获取）
+     * @param bookUrl 书籍 URL（从搜索结果 SearchResult.getBookUrl() 获取）
+     * @param source  书源简称（从 SearchResult.getSource() 获取，如 80/dubu/godamanga 等）
      * @return 书籍详情
      */
-    public BookDetail getBookDetail(String bookUrl, String sourceUrl) {
-        BookSource source = getSource(sourceUrl);
-        if (source == null) {
-            throw new IllegalStateException("找不到书源: " + sourceUrl);
-        }
-        Book book = ReaderEngine.getBookInfo(source, bookUrl);
-        cacheBook(book, sourceUrl);
-        return toBookDetail(book, source);
+    public BookDetail getBookDetail(String bookUrl, String source) {
+        BookSource src = resolveSource(source);
+        Book book = ReaderEngine.getBookInfo(src, bookUrl);
+        cacheBook(book, src.getBookSourceUrl());
+        return toBookDetail(book, src);
     }
 
-    // ==================== 6. 获取目录 ====================
+    // ==================== 5. 获取目录 ====================
 
     /**
      * 获取章节目录
      *
-     * @param bookUrl   书籍 URL
-     * @param sourceUrl 书源 URL
+     * @param bookUrl 书籍 URL
+     * @param source  书源简称
      * @return 章节列表
      */
-    public List<ChapterInfo> getChapterList(String bookUrl, String sourceUrl) {
-        BookSource source = getSource(sourceUrl);
-        if (source == null) {
-            throw new IllegalStateException("找不到书源: " + sourceUrl);
-        }
-        Book book = getOrFetchBook(bookUrl, sourceUrl);
-        List<BookChapter> chapters = ReaderEngine.getChapterList(source, book);
+    public List<ChapterInfo> getChapterList(String bookUrl, String source) {
+        BookSource src = resolveSource(source);
+        Book book = getOrFetchBook(bookUrl, src);
+        List<BookChapter> chapters = ReaderEngine.getChapterList(src, book);
         List<ChapterInfo> result = new ArrayList<>(chapters.size());
         for (BookChapter ch : chapters) {
             result.add(new ChapterInfo(ch.getTitle(), ch.getUrl(), ch.getIndex()));
@@ -403,87 +314,78 @@ public class BookSourceManager {
         return result;
     }
 
-    // ==================== 7. 获取正文 ====================
+    // ==================== 6. 获取正文 ====================
 
     /**
      * 获取章节正文（按章节序号）
      *
      * @param bookUrl      书籍 URL
-     * @param sourceUrl    书源 URL
-     * @param chapterIndex 章节序号（从 0 开始，对应 getChapterList 返回的 index）
+     * @param source        书源简称
+     * @param chapterIndex  章节序号（从 0 开始，对应 getChapterList 返回的 index）
      * @return 正文内容字符串
      */
-    public String getContent(String bookUrl, String sourceUrl, int chapterIndex) {
-        BookSource source = getSource(sourceUrl);
-        if (source == null) {
-            throw new IllegalStateException("找不到书源: " + sourceUrl);
-        }
-        Book book = getOrFetchBook(bookUrl, sourceUrl);
-        List<BookChapter> chapters = ReaderEngine.getChapterList(source, book);
+    public String getContent(String bookUrl, String source, int chapterIndex) {
+        BookSource src = resolveSource(source);
+        Book book = getOrFetchBook(bookUrl, src);
+        List<BookChapter> chapters = ReaderEngine.getChapterList(src, book);
         if (chapterIndex < 0 || chapterIndex >= chapters.size()) {
             throw new IndexOutOfBoundsException(
                     "章节序号超出范围: " + chapterIndex + ", 总章节数: " + chapters.size());
         }
         BookChapter chapter = chapters.get(chapterIndex);
-        return ReaderEngine.getBookContent(source, book, chapter);
+        return ReaderEngine.getBookContent(src, book, chapter);
     }
 
     /**
      * 获取章节正文（按章节 URL）
      *
-     * @param bookUrl     书籍 URL
-     * @param sourceUrl   书源 URL
-     * @param chapterUrl  章节 URL（从 ChapterInfo.getUrl() 获取）
+     * @param bookUrl    书籍 URL
+     * @param source     书源简称
+     * @param chapterUrl 章节 URL（从 ChapterInfo.getUrl() 获取）
      * @return 正文内容字符串
      */
-    public String getContentByUrl(String bookUrl, String sourceUrl, String chapterUrl) {
-        BookSource source = getSource(sourceUrl);
-        if (source == null) {
-            throw new IllegalStateException("找不到书源: " + sourceUrl);
-        }
-        Book book = getOrFetchBook(bookUrl, sourceUrl);
-        List<BookChapter> chapters = ReaderEngine.getChapterList(source, book);
+    public String getContentByUrl(String bookUrl, String source, String chapterUrl) {
+        BookSource src = resolveSource(source);
+        Book book = getOrFetchBook(bookUrl, src);
+        List<BookChapter> chapters = ReaderEngine.getChapterList(src, book);
         for (BookChapter ch : chapters) {
             if (ch.getUrl().equals(chapterUrl)) {
-                return ReaderEngine.getBookContent(source, book, ch);
+                return ReaderEngine.getBookContent(src, book, ch);
             }
         }
         throw new IllegalArgumentException("找不到章节 URL: " + chapterUrl);
     }
 
-    // ==================== 8. 批量下载正文 ====================
+    // ==================== 7. 批量下载正文 ====================
 
     /**
      * 批量下载章节正文（按范围）
      *
      * @param bookUrl    书籍 URL
-     * @param sourceUrl  书源 URL
+     * @param source     书源简称
      * @param startIndex 起始章节序号（从 0 开始）
      * @param endIndex   结束章节序号（不包含，即 [startIndex, endIndex)）
      * @return 正文内容列表
      */
-    public List<String> batchDownload(String bookUrl, String sourceUrl, int startIndex, int endIndex) {
-        return batchDownload(bookUrl, sourceUrl, startIndex, endIndex, 0);
+    public List<String> batchDownload(String bookUrl, String source, int startIndex, int endIndex) {
+        return batchDownload(bookUrl, source, startIndex, endIndex, 0);
     }
 
     /**
      * 批量下载章节正文（按范围，带间隔延迟）
      *
      * @param bookUrl     书籍 URL
-     * @param sourceUrl   书源 URL
+     * @param source      书源简称
      * @param startIndex  起始章节序号（从 0 开始）
      * @param endIndex    结束章节序号（不包含）
      * @param delayMs     每章间隔毫秒数（0 表示不延迟）
      * @return 正文内容列表
      */
-    public List<String> batchDownload(String bookUrl, String sourceUrl,
+    public List<String> batchDownload(String bookUrl, String source,
                                        int startIndex, int endIndex, long delayMs) {
-        BookSource source = getSource(sourceUrl);
-        if (source == null) {
-            throw new IllegalStateException("找不到书源: " + sourceUrl);
-        }
-        Book book = getOrFetchBook(bookUrl, sourceUrl);
-        List<BookChapter> chapters = ReaderEngine.getChapterList(source, book);
+        BookSource src = resolveSource(source);
+        Book book = getOrFetchBook(bookUrl, src);
+        List<BookChapter> chapters = ReaderEngine.getChapterList(src, book);
         if (startIndex < 0 || startIndex >= chapters.size()) {
             throw new IndexOutOfBoundsException("起始章节序号超出范围: " + startIndex);
         }
@@ -492,7 +394,7 @@ public class BookSourceManager {
         for (int i = startIndex; i < end; i++) {
             BookChapter chapter = chapters.get(i);
             try {
-                String content = ReaderEngine.getBookContent(source, book, chapter);
+                String content = ReaderEngine.getBookContent(src, book, chapter);
                 contents.add(content);
                 log.info("下载章节 [{}/{}]: {} | 长度: {}",
                         i - startIndex + 1, end - startIndex,
@@ -518,37 +420,34 @@ public class BookSourceManager {
     /**
      * 批量下载全部章节正文
      *
-     * @param bookUrl  书籍 URL
-     * @param sourceUrl 书源 URL
+     * @param bookUrl 书籍 URL
+     * @param source  书源简称
      * @return 正文内容列表
      */
-    public List<String> batchDownloadAll(String bookUrl, String sourceUrl) {
-        return batchDownload(bookUrl, sourceUrl, 0, Integer.MAX_VALUE);
+    public List<String> batchDownloadAll(String bookUrl, String source) {
+        return batchDownload(bookUrl, source, 0, Integer.MAX_VALUE);
     }
 
     /**
      * 批量下载并返回 Map（章节标题 → 正文）
      *
      * @param bookUrl    书籍 URL
-     * @param sourceUrl  书源 URL
+     * @param source     书源简称
      * @param startIndex 起始章节序号
      * @param endIndex   结束章节序号（不包含）
      * @return Map：章节标题 → 正文内容
      */
-    public Map<String, String> batchDownloadAsMap(String bookUrl, String sourceUrl,
+    public Map<String, String> batchDownloadAsMap(String bookUrl, String source,
                                                     int startIndex, int endIndex) {
-        BookSource source = getSource(sourceUrl);
-        if (source == null) {
-            throw new IllegalStateException("找不到书源: " + sourceUrl);
-        }
-        Book book = getOrFetchBook(bookUrl, sourceUrl);
-        List<BookChapter> chapters = ReaderEngine.getChapterList(source, book);
+        BookSource src = resolveSource(source);
+        Book book = getOrFetchBook(bookUrl, src);
+        List<BookChapter> chapters = ReaderEngine.getChapterList(src, book);
         int end = Math.min(endIndex, chapters.size());
-        Map<String, String> result = new java.util.LinkedHashMap<>();
+        Map<String, String> result = new LinkedHashMap<>();
         for (int i = startIndex; i < end; i++) {
             BookChapter ch = chapters.get(i);
             try {
-                String content = ReaderEngine.getBookContent(source, book, ch);
+                String content = ReaderEngine.getBookContent(src, book, ch);
                 result.put(ch.getTitle(), content);
             } catch (Exception e) {
                 result.put(ch.getTitle(), null);
@@ -561,15 +460,15 @@ public class BookSourceManager {
      * 批量下载并拼接为完整文本
      *
      * @param bookUrl    书籍 URL
-     * @param sourceUrl  书源 URL
+     * @param source     书源简称
      * @param startIndex 起始章节序号
      * @param endIndex   结束章节序号（不包含）
      * @param separator  章节分隔符
      * @return 拼接后的完整文本
      */
-    public String batchDownloadAsString(String bookUrl, String sourceUrl,
+    public String batchDownloadAsString(String bookUrl, String source,
                                         int startIndex, int endIndex, String separator) {
-        List<String> contents = batchDownload(bookUrl, sourceUrl, startIndex, endIndex);
+        List<String> contents = batchDownload(bookUrl, source, startIndex, endIndex);
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < contents.size(); i++) {
             if (i > 0) {
@@ -584,25 +483,40 @@ public class BookSourceManager {
 
     // ==================== 内部方法 ====================
 
-    private BookSource getSource(String sourceUrl) {
-        return sourceMap.get(sourceUrl);
+    /**
+     * 根据简称或 URL 解析书源
+     */
+    private BookSource resolveSource(String source) {
+        if (source == null || source.isEmpty()) {
+            throw new IllegalArgumentException("书源简称为空");
+        }
+        // 先按简称查
+        String url = aliasMap.get(source);
+        if (url != null) {
+            BookSource src = sourceMap.get(url);
+            if (src != null) {
+                return src;
+            }
+        }
+        // 再按 URL 直接查
+        BookSource src = sourceMap.get(source);
+        if (src != null) {
+            return src;
+        }
+        throw new IllegalStateException("找不到书源: " + source + "，可用简称: " + aliasMap.keySet());
     }
 
     /**
-     * 获取或缓存 Book 对象（避免重复请求详情页）
+     * 获取或缓存 Book 对象
      */
-    private Book getOrFetchBook(String bookUrl, String sourceUrl) {
-        String cacheKey = sourceUrl + "|" + bookUrl;
+    private Book getOrFetchBook(String bookUrl, BookSource src) {
+        String cacheKey = src.getBookSourceUrl() + "|" + bookUrl;
         Book book = bookCache.get(cacheKey);
         if (book != null) {
             return book;
         }
-        BookSource source = getSource(sourceUrl);
-        if (source == null) {
-            throw new IllegalStateException("找不到书源: " + sourceUrl);
-        }
-        book = ReaderEngine.getBookInfo(source, bookUrl);
-        cacheBook(book, sourceUrl);
+        book = ReaderEngine.getBookInfo(src, bookUrl);
+        cacheBook(book, src.getBookSourceUrl());
         return book;
     }
 
@@ -651,12 +565,21 @@ public class BookSourceManager {
 
     // ==================== DTO 转换 ====================
 
-    private static SearchResult toSearchResult(SearchBook sb, BookSource source) {
+    private Map<String, Object> toSourceInfo(BookSource s) {
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("source", findAlias(s.getBookSourceUrl()));
+        info.put("name", s.getBookSourceName());
+        info.put("type", s.getBookSourceType());
+        info.put("typeDesc", s.getBookSourceType() == TYPE_NOVEL ? "小说" : "漫画");
+        return info;
+    }
+
+    private SearchResult toSearchResult(SearchBook sb, BookSource source) {
         SearchResult r = new SearchResult();
         r.setName(sb.getName());
         r.setAuthor(sb.getAuthor());
         r.setBookUrl(sb.getBookUrl());
-        r.setSourceUrl(source.getBookSourceUrl());
+        r.setSource(findAlias(source.getBookSourceUrl()));
         r.setSourceName(source.getBookSourceName());
         r.setCoverUrl(sb.getCoverUrl());
         r.setIntro(sb.getIntro());
@@ -667,13 +590,13 @@ public class BookSourceManager {
         return r;
     }
 
-    private static BookDetail toBookDetail(Book book, BookSource source) {
+    private BookDetail toBookDetail(Book book, BookSource source) {
         BookDetail d = new BookDetail();
         d.setName(book.getName());
         d.setAuthor(book.getAuthor());
         d.setBookUrl(book.getBookUrl());
         d.setTocUrl(book.getTocUrl());
-        d.setSourceUrl(source.getBookSourceUrl());
+        d.setSource(findAlias(source.getBookSourceUrl()));
         d.setSourceName(source.getBookSourceName());
         d.setCoverUrl(book.getCoverUrl());
         d.setIntro(book.getIntro());
@@ -682,6 +605,18 @@ public class BookSourceManager {
         d.setLatestChapterTitle(book.getLatestChapterTitle());
         d.setType(source.getBookSourceType());
         return d;
+    }
+
+/**
+     * 根据书源 URL 查找简称
+     */
+    private String findAlias(String sourceUrl) {
+        for (Map.Entry<String, String> e : aliasMap.entrySet()) {
+            if (e.getValue().equals(sourceUrl)) {
+                return e.getKey();
+            }
+        }
+        return sourceUrl;
     }
 
     // ==================== 内置源加载 ====================
@@ -693,9 +628,12 @@ public class BookSourceManager {
             try {
                 BookSource source = loadBuiltinSource(file);
                 if (source != null) {
+                    String alias = extractAliasFromFilename(file);
                     sourceMap.put(source.getBookSourceUrl(), source);
+                    aliasMap.put(alias, source.getBookSourceUrl());
                     count++;
-                    log.info("加载内置小说源: {} ({})", source.getBookSourceName(), source.getBookSourceUrl());
+                    log.info("加载内置小说源: {} | 简称: {} | URL: {}",
+                            source.getBookSourceName(), alias, source.getBookSourceUrl());
                 }
             } catch (Exception e) {
                 log.error("加载内置小说源失败: {}", file, e);
@@ -706,15 +644,35 @@ public class BookSourceManager {
                 BookSource source = loadBuiltinSource(file);
                 if (source != null) {
                     ReaderEngine.initSource(source);
+                    String alias = extractAliasFromFilename(file);
                     sourceMap.put(source.getBookSourceUrl(), source);
+                    aliasMap.put(alias, source.getBookSourceUrl());
                     count++;
-                    log.info("加载内置漫画源: {} ({})", source.getBookSourceName(), source.getBookSourceUrl());
+                    log.info("加载内置漫画源: {} | 简称: {} | URL: {}",
+                            source.getBookSourceName(), alias, source.getBookSourceUrl());
                 }
             } catch (Exception e) {
                 log.error("加载内置漫画源失败: {}", file, e);
             }
         }
         log.info("内置书源加载完成，共 {} 个", count);
+    }
+
+    /**
+     * 从文件名提取简称：novel_80.json → 80，comic_godamanga.json → godamanga
+     */
+    private static String extractAliasFromFilename(String filename) {
+        // 去掉前缀 novel_ 或 comic_ 和后缀 .json
+        String name = filename;
+        if (name.startsWith("novel_")) {
+            name = name.substring(6);
+        } else if (name.startsWith("comic_")) {
+            name = name.substring(6);
+        }
+        if (name.endsWith(".json")) {
+            name = name.substring(0, name.length() - 5);
+        }
+        return name;
     }
 
     private BookSource loadBuiltinSource(String filename) throws Exception {

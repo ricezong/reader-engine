@@ -69,37 +69,39 @@ List<SearchResult> results = manager.searchNovel("斗破苍穹");
 
 // 获取详情
 SearchResult r = results.get(0);
-BookDetail detail = manager.getBookDetail(r.getBookUrl(), r.getSourceUrl());
+BookDetail detail = manager.getBookDetail(r.getBookUrl(), r.getSource());
 
 // 获取目录
-List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSourceUrl());
+List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSource());
 
 // 获取第 1 章正文
-String content = manager.getContent(r.getBookUrl(), r.getSourceUrl(), 0);
+String content = manager.getContent(r.getBookUrl(), r.getSource(), 0);
 
 // 批量下载前 10 章
-List<String> contents = manager.batchDownload(r.getBookUrl(), r.getSourceUrl(), 0, 10);
+List<String> contents = manager.batchDownload(r.getBookUrl(), r.getSource(), 0, 10);
 ```
 
 ## 内置书源
 
 ### 小说源（4 个）
 
-| 源名称 | URL | 类型 |
-|--------|-----|------|
-| 八零小说 | `http://www.80ge.info` | novel |
-| 独步小说 | `https://www.dbxsd.com` | novel |
-| 猫眼看书 | `http://api.lemiyigou.com` | novel |
-| 七猫小说 | `https://api-bc.wtzw.com` | novel |
+| 源名称 | 简称(source) | URL |
+|--------|-------------|-----|
+| 八零小说 | `80` | `http://www.80ge.info` |
+| 独步小说 | `dubu` | `https://www.dbxsd.com` |
+| 猫眼看书 | `maoyan` | `http://api.lemiyigou.com` |
+| 七猫小说 | `qimao` | `https://api-bc.wtzw.com` |
 
 ### 漫画源（4 个）
 
-| 源名称 | URL | 类型 |
-|--------|-----|------|
-| G站漫画 | `https://godamanga.com` | comic |
-| 漫画台 | `https://m.manhuatai.com` | comic |
-| 如漫画 | `https://www.rumanhua.com` | comic |
-| 再漫画 | `https://www.zaimanhua.com` | comic |
+| 源名称 | 简称(source) | URL |
+|--------|-------------|-----|
+| G站漫画 | `godamanga` | `https://godamanga.com` |
+| 漫画台 | `manhuatai` | `https://m.manhuatai.com` |
+| 如漫画 | `rumanhua` | `https://www.rumanhua.com` |
+| 再漫画 | `zaimanhua` | `https://www.zaimanhua.com` |
+
+> 获取详情/目录/正文时传入 `source` 简称即可，无需传完整 URL。
 
 ## API 文档
 
@@ -113,27 +115,15 @@ List<String> contents = manager.batchDownload(r.getBookUrl(), r.getSourceUrl(), 
 BookSourceManager manager = BookSourceManager.getInstance();
 ```
 
-#### 1. 导入书源
-
-| 方法 | 参数 | 说明 |
-|------|------|------|
-| `importSources(String json)` | 书源 JSON 字符串 | 导入单个或数组格式 |
-| `importSources(InputStream is)` | 输入流 | 从文件导入 |
-| `removeSource(String sourceUrl)` | 书源 URL | 移除指定源 |
-| `clearAllSources()` | — | 清除所有源 |
-| `reloadBuiltinSources()` | — | 重新加载内置源 |
-
-#### 2. 列出书源
+#### 1. 列出书源
 
 | 方法 | 返回值 | 说明 |
 |------|--------|------|
-| `getSourceCount()` | `int` | 书源总数 |
-| `listSourceNames()` | `List<String>` | 所有源名称 |
-| `listNovelSourceNames()` | `List<String>` | 小说源名称 |
-| `listComicSourceNames()` | `List<String>` | 漫画源名称 |
-| `listAllSources()` | `List<Map<String, Object>>` | 所有源详情 (name, url, type, typeDesc) |
+| `listAllSources()` | `List<Map<String, Object>>` | 所有源 (source, name, type, typeDesc) |
+| `listNovelSources()` | `List<Map<String, Object>>` | 小说源 |
+| `listComicSources()` | `List<Map<String, Object>>` | 漫画源 |
 
-#### 3. 搜索
+#### 2. 搜索
 
 | 方法 | 参数 | 说明 |
 |------|------|------|
@@ -151,7 +141,7 @@ BookSourceManager manager = BookSourceManager.getInstance();
 | `name` | String | 书名 |
 | `author` | String | 作者 |
 | `bookUrl` | String | 书籍 URL（后续操作需要） |
-| `sourceUrl` | String | 书源 URL（后续操作需要） |
+| `source` | String | 书源简称（后续操作需要，如 80/dubu/godamanga） |
 | `sourceName` | String | 书源名称 |
 | `coverUrl` | String | 封面 URL |
 | `intro` | String | 简介 |
@@ -159,7 +149,7 @@ BookSourceManager manager = BookSourceManager.getInstance();
 | `wordCount` | String | 字数 |
 | `type` | int | 0=小说, 2=漫画 |
 
-#### 4. 按作者搜索
+#### 3. 按作者搜索
 
 | 方法 | 参数 | 说明 |
 |------|------|------|
@@ -169,19 +159,19 @@ BookSourceManager manager = BookSourceManager.getInstance();
 
 返回 `List<SearchResult>`，自动过滤匹配作者的结果。
 
-#### 5. 获取详情
+#### 4. 获取详情
 
 | 方法 | 参数 | 说明 |
 |------|------|------|
-| `getBookDetail(String bookUrl, String sourceUrl)` | 书籍URL, 书源URL | 获取书籍详情 |
+| `getBookDetail(String bookUrl, String source)` | 书籍URL, 书源简称 | 获取书籍详情 |
 
-返回 `BookDetail`，包含：name, author, bookUrl, tocUrl, sourceUrl, sourceName, coverUrl, intro, kind, wordCount, latestChapterTitle, type。
+返回 `BookDetail`，包含：name, author, bookUrl, tocUrl, source, sourceName, coverUrl, intro, kind, wordCount, latestChapterTitle, type。
 
-#### 6. 获取目录
+#### 5. 获取目录
 
 | 方法 | 参数 | 说明 |
 |------|------|------|
-| `getChapterList(String bookUrl, String sourceUrl)` | 书籍URL, 书源URL | 获取章节列表 |
+| `getChapterList(String bookUrl, String source)` | 书籍URL, 书源简称 | 获取章节列表 |
 
 返回 `List<ChapterInfo>`，每个章节包含：
 
@@ -191,24 +181,24 @@ BookSourceManager manager = BookSourceManager.getInstance();
 | `url` | String | 章节 URL |
 | `index` | int | 章节序号（从 0 开始） |
 
-#### 7. 获取正文
+#### 6. 获取正文
 
 | 方法 | 参数 | 说明 |
 |------|------|------|
-| `getContent(bookUrl, sourceUrl, chapterIndex)` | 书籍URL, 书源URL, 章节序号 | 按序号获取正文 |
-| `getContentByUrl(bookUrl, sourceUrl, chapterUrl)` | 书籍URL, 书源URL, 章节URL | 按URL获取正文 |
+| `getContent(bookUrl, source, chapterIndex)` | 书籍URL, 书源简称, 章节序号 | 按序号获取正文 |
+| `getContentByUrl(bookUrl, source, chapterUrl)` | 书籍URL, 书源简称, 章节URL | 按URL获取正文 |
 
 返回 `String` 正文内容（漫画为图片 HTML）。
 
-#### 8. 批量下载
+#### 7. 批量下载
 
 | 方法 | 参数 | 说明 |
 |------|------|------|
-| `batchDownload(bookUrl, sourceUrl, start, end)` | 书籍URL, 书源URL, 起始序号, 结束序号(不含) | 下载范围 |
-| `batchDownload(bookUrl, sourceUrl, start, end, delayMs)` | 同上+间隔毫秒 | 带延迟 |
-| `batchDownloadAll(bookUrl, sourceUrl)` | 书籍URL, 书源URL | 下载全部 |
-| `batchDownloadAsMap(bookUrl, sourceUrl, start, end)` | 同上 | 返回 `Map<标题, 正文>` |
-| `batchDownloadAsString(bookUrl, sourceUrl, start, end, sep)` | 同上+分隔符 | 拼接为完整文本 |
+| `batchDownload(bookUrl, source, start, end)` | 书籍URL, 书源简称, 起始序号, 结束序号(不含) | 下载范围 |
+| `batchDownload(bookUrl, source, start, end, delayMs)` | 同上+间隔毫秒 | 带延迟 |
+| `batchDownloadAll(bookUrl, source)` | 书籍URL, 书源简称 | 下载全部 |
+| `batchDownloadAsMap(bookUrl, source, start, end)` | 同上 | 返回 `Map<标题, 正文>` |
+| `batchDownloadAsString(bookUrl, source, start, end, sep)` | 同上+分隔符 | 拼接为完整文本 |
 
 返回 `List<String>`（`batchDownloadAsMap` 返回 `Map<String,String>`，`batchDownloadAsString` 返回 `String`）。
 
@@ -242,23 +232,23 @@ SearchResult r = results.get(0);
 System.out.println("书名: " + r.getName() + " | 作者: " + r.getAuthor());
 
 // 3. 获取详情
-BookDetail detail = manager.getBookDetail(r.getBookUrl(), r.getSourceUrl());
+BookDetail detail = manager.getBookDetail(r.getBookUrl(), r.getSource());
 System.out.println("简介: " + detail.getIntro());
 
 // 4. 获取目录
-List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSourceUrl());
+List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSource());
 System.out.println("章节数: " + chapters.size());
 
 // 5. 获取第 1 章正文
-String content = manager.getContent(r.getBookUrl(), r.getSourceUrl(), 0);
+String content = manager.getContent(r.getBookUrl(), r.getSource(), 0);
 System.out.println("正文长度: " + content.length());
 
 // 6. 批量下载前 10 章
-List<String> contents = manager.batchDownload(r.getBookUrl(), r.getSourceUrl(), 0, 10);
+List<String> contents = manager.batchDownload(r.getBookUrl(), r.getSource(), 0, 10);
 
 // 7. 下载为完整文本
 String fullText = manager.batchDownloadAsString(
-    r.getBookUrl(), r.getSourceUrl(), 0, 10, "\n\n"
+    r.getBookUrl(), r.getSource(), 0, 10, "\n\n"
 );
 ```
 
@@ -274,10 +264,10 @@ SearchResult r = results.get(0);
 System.out.println("漫画: " + r.getName());
 
 // 获取目录
-List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSourceUrl());
+List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSource());
 
 // 获取第 1 章正文（图片 HTML）
-String content = manager.getContent(r.getBookUrl(), r.getSourceUrl(), 0);
+String content = manager.getContent(r.getBookUrl(), r.getSource(), 0);
 int imgCount = content.split("<img").length - 1;
 System.out.println("图片数: " + imgCount);
 ```
@@ -290,27 +280,6 @@ BookSourceManager manager = BookSourceManager.getInstance();
 List<SearchResult> results = manager.searchNovelByAuthor("天蚕土豆");
 for (SearchResult r : results) {
     System.out.println(r.getName() + " - " + r.getAuthor());
-}
-```
-
-### 导入外部书源
-
-```java
-BookSourceManager manager = BookSourceManager.getInstance();
-
-// 从 JSON 字符串导入
-String json = "[{\"bookSourceName\":\"新源\", \"bookSourceUrl\":\"https://...\", ...}]";
-int count = manager.importSources(json);
-System.out.println("导入了 " + count + " 个源");
-
-// 从文件导入
-try (InputStream is = new FileInputStream("my_source.json")) {
-    manager.importSources(is);
-}
-
-// 列出所有源
-for (Map<String, Object> source : manager.listAllSources()) {
-    System.out.println(source.get("name") + " | " + source.get("typeDesc"));
 }
 ```
 
@@ -328,8 +297,8 @@ public class BookService {
         return manager.searchNovel(keyword);
     }
 
-    public String downloadChapter(String bookUrl, String sourceUrl, int chapterIndex) {
-        return manager.getContent(bookUrl, sourceUrl, chapterIndex);
+    public String downloadChapter(String bookUrl, String source, int chapterIndex) {
+        return manager.getContent(bookUrl, source, chapterIndex);
     }
 }
 ```
@@ -401,7 +370,7 @@ Rhino JS 引擎 (执行书源 JS 规则)
 
 1. **通用 DTO**：用户不接触 `SearchBook`/`Book`/`BookChapter` 等内部对象，统一使用 `SearchResult`/`BookDetail`/`ChapterInfo` 和 `String`/`int` 参数。
 
-2. **Book 缓存**：`BookSourceManager` 内部缓存 Book 对象（`sourceUrl + bookUrl` 为 key），避免获取目录和正文时重复请求详情页。
+2. **Book 缓存**：`BookSourceManager` 内部缓存 Book 对象（`source + bookUrl` 为 key），避免获取目录和正文时重复请求详情页。
 
 3. **Kotlin 协程桥接**：Kotlin 的 `WebBook.kt` 使用 `suspend` 函数，通过 `ReaderEngineBridge.kt` 的 `runBlocking` 桥接为同步方法。
 
@@ -454,14 +423,6 @@ mvn test -Dtest="cn.kong.app.engine.BookSourceManagerTest"
 
 ```java
 ReaderEngine.initSource(source);
-```
-
-### Q: 如何添加自定义书源？
-
-```java
-manager.importSources(jsonString);
-// 或
-manager.importSources(new FileInputStream("source.json"));
 ```
 
 ### Q: 打包时 rhino 依赖找不到？

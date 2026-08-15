@@ -32,20 +32,20 @@ public class BookSourceManagerTest {
     @DisplayName("内置源加载")
     public void testBuiltinSourcesLoaded() {
         log.info("========== 测试 1: 内置源加载 ==========");
-        assertEquals(8, manager.getSourceCount());
-
-        List<String> novels = manager.listNovelSourceNames();
-        log.info("小说源 ({}): {}", novels.size(), novels);
-        assertEquals(4, novels.size());
-
-        List<String> comics = manager.listComicSourceNames();
-        log.info("漫画源 ({}): {}", comics.size(), comics);
-        assertEquals(4, comics.size());
 
         List<Map<String, Object>> all = manager.listAllSources();
+        assertEquals(8, all.size());
         for (Map<String, Object> s : all) {
-            log.info("  {} | {} | {}", s.get("name"), s.get("url"), s.get("typeDesc"));
+            log.info("  source={} | name={} | type={}", s.get("source"), s.get("name"), s.get("typeDesc"));
         }
+
+        List<Map<String, Object>> novels = manager.listNovelSources();
+        assertEquals(4, novels.size());
+        log.info("小说源: {}", novels);
+
+        List<Map<String, Object>> comics = manager.listComicSources();
+        assertEquals(4, comics.size());
+        log.info("漫画源: {}", comics);
     }
 
     @Test
@@ -57,7 +57,7 @@ public class BookSourceManagerTest {
         log.info("结果: {} 本", results.size());
         for (int i = 0; i < Math.min(results.size(), 5); i++) {
             SearchResult r = results.get(i);
-            log.info("  [{}] {} | {} | 源:{}", i + 1, r.getName(), r.getAuthor(), r.getSourceName());
+            log.info("  [{}] {} | {} | source={}", i + 1, r.getName(), r.getAuthor(), r.getSource());
         }
         assertFalse(results.isEmpty());
     }
@@ -71,7 +71,7 @@ public class BookSourceManagerTest {
         log.info("结果: {} 本", results.size());
         for (int i = 0; i < Math.min(results.size(), 5); i++) {
             SearchResult r = results.get(i);
-            log.info("  [{}] {} | {} | 源:{}", i + 1, r.getName(), r.getAuthor(), r.getSourceName());
+            log.info("  [{}] {} | {} | source={}", i + 1, r.getName(), r.getAuthor(), r.getSource());
         }
         assertFalse(results.isEmpty());
     }
@@ -96,7 +96,6 @@ public class BookSourceManagerTest {
         log.info("========== 测试 5: 搜索全部源 ==========");
         List<SearchResult> results = manager.search("斗破苍穹");
         log.info("全部结果: {} 本", results.size());
-        // 统计各源
         Map<String, Integer> stat = new java.util.LinkedHashMap<>();
         for (SearchResult r : results) {
             stat.merge(r.getSourceName(), 1, Integer::sum);
@@ -116,7 +115,7 @@ public class BookSourceManagerTest {
         assertFalse(results.isEmpty());
 
         SearchResult r = results.get(0);
-        BookDetail detail = manager.getBookDetail(r.getBookUrl(), r.getSourceUrl());
+        BookDetail detail = manager.getBookDetail(r.getBookUrl(), r.getSource());
         assertNotNull(detail);
         log.info("书名: {} | 作者: {}", detail.getName(), detail.getAuthor());
         log.info("简介: {}", detail.getIntro() == null ? "" :
@@ -132,7 +131,7 @@ public class BookSourceManagerTest {
         assertFalse(results.isEmpty());
 
         SearchResult r = results.get(0);
-        List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSourceUrl());
+        List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSource());
         log.info("章节数: {}", chapters.size());
         assertTrue(!chapters.isEmpty());
         for (int i = 0; i < Math.min(chapters.size(), 5); i++) {
@@ -149,7 +148,7 @@ public class BookSourceManagerTest {
         assertFalse(results.isEmpty());
 
         SearchResult r = results.get(0);
-        String content = manager.getContent(r.getBookUrl(), r.getSourceUrl(), 0);
+        String content = manager.getContent(r.getBookUrl(), r.getSource(), 0);
         int len = content == null ? 0 : content.length();
         log.info("第1章正文长度: {}", len);
         if (len > 0) {
@@ -166,15 +165,14 @@ public class BookSourceManagerTest {
         assertFalse(results.isEmpty());
 
         SearchResult r = results.get(0);
-        List<String> contents = manager.batchDownload(r.getBookUrl(), r.getSourceUrl(), 0, 3);
+        List<String> contents = manager.batchDownload(r.getBookUrl(), r.getSource(), 0, 3);
         assertEquals(3, contents.size());
         for (int i = 0; i < contents.size(); i++) {
             int len = contents.get(i) == null ? 0 : contents.get(i).length();
             log.info("  第{}章: 长度 {}", i + 1, len);
         }
 
-        // 测试 Map 形式
-        Map<String, String> map = manager.batchDownloadAsMap(r.getBookUrl(), r.getSourceUrl(), 0, 3);
+        Map<String, String> map = manager.batchDownloadAsMap(r.getBookUrl(), r.getSource(), 0, 3);
         log.info("Map 下载数量: {}", map.size());
     }
 
@@ -191,15 +189,15 @@ public class BookSourceManagerTest {
         SearchResult r = results.get(0);
         log.info("首本: {} | {}", r.getName(), r.getAuthor());
 
-        BookDetail detail = manager.getBookDetail(r.getBookUrl(), r.getSourceUrl());
+        BookDetail detail = manager.getBookDetail(r.getBookUrl(), r.getSource());
         assertNotNull(detail);
         log.info("书名: {}", detail.getName());
 
-        List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSourceUrl());
+        List<ChapterInfo> chapters = manager.getChapterList(r.getBookUrl(), r.getSource());
         log.info("章节数: {}", chapters.size());
         if (chapters.isEmpty()) return;
 
-        String content = manager.getContent(r.getBookUrl(), r.getSourceUrl(), 0);
+        String content = manager.getContent(r.getBookUrl(), r.getSource(), 0);
         int len = content == null ? 0 : content.length();
         int imgCount = content == null ? 0 : content.split("<img").length - 1;
         log.info("第1章: 长度 {} | 图片数 {}", len, imgCount);

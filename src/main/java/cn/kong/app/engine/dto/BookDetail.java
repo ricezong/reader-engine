@@ -15,8 +15,8 @@ public class BookDetail {
     private String bookUrl;
     /** 目录页 URL */
     private String tocUrl;
-    /** 书源 URL */
-    private String sourceUrl;
+    /** 书源简称（如 80、dubu、godamanga 等） */
+    private String source;
     /** 书源名称 */
     private String sourceName;
     /** 封面 URL */
@@ -48,8 +48,8 @@ public class BookDetail {
     public String getTocUrl() { return tocUrl; }
     public void setTocUrl(String tocUrl) { this.tocUrl = tocUrl; }
 
-    public String getSourceUrl() { return sourceUrl; }
-    public void setSourceUrl(String sourceUrl) { this.sourceUrl = sourceUrl; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
 
     public String getSourceName() { return sourceName; }
     public void setSourceName(String sourceName) { this.sourceName = sourceName; }
