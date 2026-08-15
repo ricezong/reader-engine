@@ -138,6 +138,8 @@ ReaderService service = ReaderService.getInstance();
 |------|------|------|
 | `search(String keyword)` | 关键词 | 跨所有源搜索 |
 | `search(String keyword, int page)` | 关键词, 页码 | 指定页码 |
+| `search(String keyword, String source)` | 关键词, 书源简称 | 在指定书源中搜索 |
+| `search(String keyword, String source, int page)` | 关键词, 书源简称, 页码 | 指定书源 + 页码 |
 | `searchNovel(String keyword)` | 关键词 | 仅搜索小说源 |
 | `searchNovel(String keyword, int page)` | 关键词, 页码 | 小说源指定页 |
 | `searchComic(String keyword)` | 关键词 | 仅搜索漫画源 |

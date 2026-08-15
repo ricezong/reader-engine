@@ -228,6 +228,32 @@ public class ReaderService {
         return doSearch(comics, keyword, page);
     }
 
+    // ==================== 2.1 单源搜索 ====================
+
+    /**
+     * 在指定书源中搜索
+     *
+     * @param keyword 搜索关键词
+     * @param source  书源简称（如 80、dubu、godamanga 等）
+     * @return 搜索结果列表
+     */
+    public List<SearchResult> search(String keyword, String source) {
+        return search(keyword, source, 1);
+    }
+
+    /**
+     * 在指定书源中搜索（指定页码）
+     *
+     * @param keyword 搜索关键词
+     * @param source  书源简称（如 80、dubu、godamanga 等）
+     * @param page    页码（从 1 开始）
+     * @return 搜索结果列表
+     */
+    public List<SearchResult> search(String keyword, String source, int page) {
+        BookSource src = resolveSource(source);
+        return doSearch(List.of(src), keyword, page);
+    }
+
     // ==================== 3. 按作者搜索 ====================
 
     /**
