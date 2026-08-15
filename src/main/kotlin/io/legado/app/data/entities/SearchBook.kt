@@ -4,8 +4,6 @@ package io.legado.app.data.entities
 //import androidx.room.*
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
 //@Parcelize
 //@Entity(
 //    tableName = "searchBooks",
@@ -17,7 +15,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 //        onDelete = ForeignKey.CASCADE
 //    ))]
 //)
-@JsonIgnoreProperties("variableMap", "infoHtml", "tocHtml", "origins", "kindList")
 data class SearchBook(
 //    @PrimaryKey
     override var bookUrl: String = "",

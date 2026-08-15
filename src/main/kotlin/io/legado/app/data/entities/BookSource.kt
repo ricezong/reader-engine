@@ -1,13 +1,11 @@
 package io.legado.app.data.entities
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import io.legado.app.data.entities.rule.*
 import io.legado.app.utils.GSON
 import io.legado.app.utils.SourceAnalyzer
 import io.legado.app.utils.fromJsonObject
 import java.io.InputStream
 
-@JsonIgnoreProperties("headerMap", "source")
 data class BookSource(
     var bookSourceName: String = "",           // 名称
     var bookSourceGroup: String? = null,       // 分组

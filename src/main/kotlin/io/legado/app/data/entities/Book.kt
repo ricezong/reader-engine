@@ -11,9 +11,6 @@ import java.nio.charset.Charset
 import java.io.File
 import kotlin.math.max
 import kotlin.math.min
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
-@JsonIgnoreProperties("variableMap", "infoHtml", "tocHtml", "config", "rootDir", "readConfig", "realAuthor", "unreadChapterNum", "folderName", "kindList", "_userNameSpace", "bookDir", "userNameSpace")
 data class Book(
         override var bookUrl: String = "",                   // 详情页Url(本地书源存储完整文件路径)
         var tocUrl: String = "",                    // 目录页Url (toc=table of Contents)
