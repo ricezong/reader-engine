@@ -99,6 +99,15 @@ public class ReaderService {
      */
     private final ConcurrentHashMap<String, Book> bookCache = new ConcurrentHashMap<>();
 
+    /**
+     * 缓存写入时间戳，用于 TTL 过期判断。
+     * key 同 bookCache
+     */
+    private final ConcurrentHashMap<String, Long> bookCacheTime = new ConcurrentHashMap<>();
+
+    /** 缓存默认存活时间：30 分钟 */
+    private static final long CACHE_TTL_MS = 30 * 60 * 1000L;
+
     private ReaderService() {
         loadBuiltinSources();
     }
@@ -316,8 +325,7 @@ public class ReaderService {
      */
     public BookDetail getBookDetail(String bookUrl, String source) {
         BookSource src = resolveSource(source);
-        Book book = ReaderEngine.getBookInfo(src, bookUrl);
-        cacheBook(book, src.getBookSourceUrl());
+        Book book = getOrFetchBook(bookUrl, src);
         return toBookDetail(book, src);
     }
 
@@ -508,22 +516,52 @@ public class ReaderService {
     }
 
     /**
-     * 获取或缓存 Book 对象
+     * 获取或缓存 Book 对象（缓存优先，未命中则请求网络）
      */
     private Book getOrFetchBook(String bookUrl, BookSource src) {
         String cacheKey = src.getBookSourceUrl() + "|" + bookUrl;
-        Book book = bookCache.get(cacheKey);
-        if (book != null) {
-            return book;
+        // 检查缓存是否命中且未过期
+        Long cachedAt = bookCacheTime.get(cacheKey);
+        if (cachedAt != null && System.currentTimeMillis() - cachedAt < CACHE_TTL_MS) {
+            Book cached = bookCache.get(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
         }
-        book = ReaderEngine.getBookInfo(src, bookUrl);
+        // 缓存未命中或已过期，请求网络
+        Book book = ReaderEngine.getBookInfo(src, bookUrl);
         cacheBook(book, src.getBookSourceUrl());
         return book;
     }
 
     private void cacheBook(Book book, String sourceUrl) {
         String cacheKey = sourceUrl + "|" + book.getBookUrl();
+        long now = System.currentTimeMillis();
         bookCache.put(cacheKey, book);
+        bookCacheTime.put(cacheKey, now);
+        // 清理过期缓存
+        cleanExpired(now);
+    }
+
+    /**
+     * 清理过期的缓存条目
+     */
+    private void cleanExpired(long now) {
+        long deadline = now - CACHE_TTL_MS;
+        for (String key : bookCacheTime.keySet()) {
+            if (bookCacheTime.get(key) < deadline) {
+                bookCacheTime.remove(key);
+                bookCache.remove(key);
+            }
+        }
+    }
+
+    /**
+     * 手动清除所有缓存
+     */
+    public void clearCache() {
+        bookCache.clear();
+        bookCacheTime.clear();
     }
 
     /**
