@@ -657,7 +657,19 @@ class AnalyzeRule(
         // 预加载 jsLib
         val jsLibCode = (source as? BookSource)?.jsLib
         val fullScript = if (!jsLibCode.isNullOrBlank()) "$jsLibCode\n$jsStr" else jsStr
-        return SCRIPT_ENGINE.eval(fullScript, bindings)
+        return try {
+            SCRIPT_ENGINE.eval(fullScript, bindings)
+        } catch (e: org.mozilla.javascript.EcmaError) {
+            val sourceName = (source as? BookSource)?.bookSourceName ?: source?.getTag() ?: "unknown"
+            val sourceUrl = (source as? BookSource)?.bookSourceUrl ?: baseUrl ?: "unknown"
+            throw Exception(
+                "JS执行失败 [书源: $sourceName ($sourceUrl)] [baseUrl: $baseUrl]" +
+                "\n错误: ${e.message}" +
+                "\nresult类型: ${result?.javaClass?.simpleName ?: "null"}" +
+                "\nresult内容(前200字): ${result?.toString()?.take(200) ?: "null"}",
+                e
+            )
+        }
     }
 
     override fun getSource(): BaseSource? {

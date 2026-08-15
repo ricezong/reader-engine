@@ -166,6 +166,15 @@ interface BaseSource : JsExtensions {
         } else {
             jsStr
         }
-        return AppConst.SCRIPT_ENGINE.eval(fullScript, bindings)
+        return try {
+            AppConst.SCRIPT_ENGINE.eval(fullScript, bindings)
+        } catch (e: org.mozilla.javascript.EcmaError) {
+            val sourceName = (this as? BookSource)?.bookSourceName ?: getTag()
+            throw Exception(
+                "JS执行失败 [书源: $sourceName (${getKey()})]" +
+                "\n错误: ${e.message}",
+                e
+            )
+        }
     }
 }

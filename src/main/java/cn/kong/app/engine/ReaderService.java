@@ -93,21 +93,6 @@ public class ReaderService {
      */
     private final ConcurrentHashMap<String, String> aliasMap = new ConcurrentHashMap<>();
 
-    /**
-     * Book 对象缓存，避免重复请求详情。
-     * key = sourceUrl + "|" + bookUrl
-     */
-    private final ConcurrentHashMap<String, Book> bookCache = new ConcurrentHashMap<>();
-
-    /**
-     * 缓存写入时间戳，用于 TTL 过期判断。
-     * key 同 bookCache
-     */
-    private final ConcurrentHashMap<String, Long> bookCacheTime = new ConcurrentHashMap<>();
-
-    /** 缓存默认存活时间：30 分钟 */
-    private static final long CACHE_TTL_MS = 30 * 60 * 1000L;
-
     private ReaderService() {
         loadBuiltinSources();
     }
@@ -260,6 +245,7 @@ public class ReaderService {
      */
     public List<SearchResult> search(String keyword, String source, int page) {
         BookSource src = resolveSource(source);
+        ensureSourceReady(src);
         return doSearch(List.of(src), keyword, page);
     }
 
@@ -325,7 +311,8 @@ public class ReaderService {
      */
     public BookDetail getBookDetail(String bookUrl, String source) {
         BookSource src = resolveSource(source);
-        Book book = getOrFetchBook(bookUrl, src);
+        ensureSourceReady(src);
+        Book book = ReaderEngine.getBookInfo(src, bookUrl);
         return toBookDetail(book, src);
     }
 
@@ -340,7 +327,8 @@ public class ReaderService {
      */
     public List<ChapterInfo> getChapterList(String bookUrl, String source) {
         BookSource src = resolveSource(source);
-        Book book = getOrFetchBook(bookUrl, src);
+        ensureSourceReady(src);
+        Book book = ReaderEngine.getBookInfo(src, bookUrl);
         List<BookChapter> chapters = ReaderEngine.getChapterList(src, book);
         List<ChapterInfo> result = new ArrayList<>(chapters.size());
         for (BookChapter ch : chapters) {
@@ -361,7 +349,8 @@ public class ReaderService {
      */
     public String getContent(String bookUrl, String source, int chapterIndex) {
         BookSource src = resolveSource(source);
-        Book book = getOrFetchBook(bookUrl, src);
+        ensureSourceReady(src);
+        Book book = ReaderEngine.getBookInfo(src, bookUrl);
         List<BookChapter> chapters = ReaderEngine.getChapterList(src, book);
         if (chapterIndex < 0 || chapterIndex >= chapters.size()) {
             throw new IndexOutOfBoundsException(
@@ -381,7 +370,8 @@ public class ReaderService {
      */
     public String getContentByUrl(String bookUrl, String source, String chapterUrl) {
         BookSource src = resolveSource(source);
-        Book book = getOrFetchBook(bookUrl, src);
+        ensureSourceReady(src);
+        Book book = ReaderEngine.getBookInfo(src, bookUrl);
         List<BookChapter> chapters = ReaderEngine.getChapterList(src, book);
         for (BookChapter ch : chapters) {
             if (ch.getUrl().equals(chapterUrl)) {
@@ -419,7 +409,8 @@ public class ReaderService {
     public List<ChapterContent> batchDownload(String bookUrl, String source,
                                                int startIndex, int endIndex, long delayMs) {
         BookSource src = resolveSource(source);
-        Book book = getOrFetchBook(bookUrl, src);
+        ensureSourceReady(src);
+        Book book = ReaderEngine.getBookInfo(src, bookUrl);
         List<BookChapter> chapters = ReaderEngine.getChapterList(src, book);
         if (startIndex < 0 || startIndex >= chapters.size()) {
             throw new IndexOutOfBoundsException("起始章节序号超出范围: " + startIndex);
@@ -516,52 +507,20 @@ public class ReaderService {
     }
 
     /**
-     * 获取或缓存 Book 对象（缓存优先，未命中则请求网络）
+     * 确保书源就绪：每次请求前重新初始化 variable，
+     * 防止 token/cookie 过期导致 JS 执行失败。
+     * 仅对有 loginUrl 的书源生效。
      */
-    private Book getOrFetchBook(String bookUrl, BookSource src) {
-        String cacheKey = src.getBookSourceUrl() + "|" + bookUrl;
-        // 检查缓存是否命中且未过期
-        Long cachedAt = bookCacheTime.get(cacheKey);
-        if (cachedAt != null && System.currentTimeMillis() - cachedAt < CACHE_TTL_MS) {
-            Book cached = bookCache.get(cacheKey);
-            if (cached != null) {
-                return cached;
+    private void ensureSourceReady(BookSource src) {
+        synchronized (src) {
+            try {
+                // 清除旧 variable，强制重新执行 login JS
+                src.setVariable(null);
+                ReaderEngine.initSource(src);
+            } catch (Exception e) {
+                log.warn("书源 [{}] 重新初始化失败，将使用旧状态继续: {}", src.getBookSourceName(), e.getMessage());
             }
         }
-        // 缓存未命中或已过期，请求网络
-        Book book = ReaderEngine.getBookInfo(src, bookUrl);
-        cacheBook(book, src.getBookSourceUrl());
-        return book;
-    }
-
-    private void cacheBook(Book book, String sourceUrl) {
-        String cacheKey = sourceUrl + "|" + book.getBookUrl();
-        long now = System.currentTimeMillis();
-        bookCache.put(cacheKey, book);
-        bookCacheTime.put(cacheKey, now);
-        // 清理过期缓存
-        cleanExpired(now);
-    }
-
-    /**
-     * 清理过期的缓存条目
-     */
-    private void cleanExpired(long now) {
-        long deadline = now - CACHE_TTL_MS;
-        for (String key : bookCacheTime.keySet()) {
-            if (bookCacheTime.get(key) < deadline) {
-                bookCacheTime.remove(key);
-                bookCache.remove(key);
-            }
-        }
-    }
-
-    /**
-     * 手动清除所有缓存
-     */
-    public void clearCache() {
-        bookCache.clear();
-        bookCacheTime.clear();
     }
 
     /**
