@@ -16,16 +16,16 @@
 
 ### 技术栈
 
-| 组件 | 技术 |
-|------|------|
-| 语言 | Java 11 + Kotlin 1.8 |
-| 构建 | Maven + maven-shade-plugin (fat jar) |
-| HTTP | OkHttp 4.12 |
-| HTML 解析 | Jsoup 1.17 + JsoupXpath 2.5 |
-| JSON 解析 | Gson 2.10 + JsonPath 2.9 |
-| JS 引擎 | Mozilla Rhino 1.7.13 (定制版) |
-| 协程 | Kotlin Coroutines 1.7 |
-| 加密 | Hutool + BouncyCastle |
+| 组件 | 技术                                     |
+|------|----------------------------------------|
+| 语言 | Java 1.8 + Kotlin 1.8                  |
+| 构建 | Maven + maven-shade-plugin (fat jar)   |
+| HTTP | OkHttp 4.12                            |
+| HTML 解析 | Jsoup 1.17 + JsoupXpath 2.5            |
+| JSON 解析 | Gson 2.10 + JsonPath 2.9               |
+| JS 引擎 | Mozilla Rhino 1.7.13 (定制版)             |
+| 协程 | Kotlin Coroutines 1.7                  |
+| 加密 | Hutool + BouncyCastle                  |
 | 日志 | kotlin-logging 3.0.5 (slf4j-api 由宿主提供) |
 
 ## 快速开始
