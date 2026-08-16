@@ -8,6 +8,7 @@ import io.legado.app.utils.Utf8BomUtils
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -27,13 +28,25 @@ suspend fun OkHttpClient.newCallResponse(
         val requestBuilder = Request.Builder()
         requestBuilder.apply(builder)
         var response: Response? = null
+        var lastError: Exception? = null
         for (i in 0..retry) {
-            response = newCall(requestBuilder.build()).await()
-            if (response.isSuccessful) {
-                return@withContext response
+            try {
+                response?.close()
+                response = newCall(requestBuilder.build()).await()
+                if (response.isSuccessful) {
+                    return@withContext response
+                }
+            } catch (e: IOException) {
+                lastError = e
+                response?.close()
+                response = null
+            }
+            if (i < retry) {
+                delay(500L)
             }
         }
-        return@withContext response!!
+        response?.let { return@withContext it }
+        throw lastError ?: IOException("请求失败且无响应")
     }
 }
 
@@ -53,13 +66,25 @@ suspend fun OkHttpClient.newCall(
     val requestBuilder = Request.Builder()
     requestBuilder.apply(builder)
     var response: Response? = null
+    var lastError: Exception? = null
     for (i in 0..retry) {
-        response = this.newCall(requestBuilder.build()).await()
-        if (response.isSuccessful) {
-            return response.body!!
+        try {
+            response?.close()
+            response = this.newCall(requestBuilder.build()).await()
+            if (response.isSuccessful) {
+                return response.body ?: throw IOException("响应体为空")
+            }
+        } catch (e: IOException) {
+            lastError = e
+            response?.close()
+            response = null
+        }
+        if (i < retry) {
+            delay(500L)
         }
     }
-    return response!!.body ?: throw IOException(response.message)
+    response?.let { return it.body ?: throw IOException(it.message) }
+    throw lastError ?: IOException("请求失败且无响应")
 }
 
 suspend fun OkHttpClient.newCallStrResponse(
@@ -69,13 +94,25 @@ suspend fun OkHttpClient.newCallStrResponse(
     val requestBuilder = Request.Builder()
     requestBuilder.apply(builder)
     var response: Response? = null
+    var lastError: Exception? = null
     for (i in 0..retry) {
-        response = this.newCall(requestBuilder.build()).await()
-        if (response.isSuccessful) {
-            return StrResponse(response, response.body!!.text())
+        try {
+            response?.close()
+            response = this.newCall(requestBuilder.build()).await()
+            if (response.isSuccessful) {
+                return StrResponse(response, response.body?.text() ?: response.message)
+            }
+        } catch (e: IOException) {
+            lastError = e
+            response?.close()
+            response = null
+        }
+        if (i < retry) {
+            delay(500L)
         }
     }
-    return StrResponse(response!!, response.body?.text() ?: response.message)
+    response?.let { return StrResponse(it, it.body?.text() ?: it.message) }
+    throw lastError ?: IOException("请求失败且无响应")
 }
 
 suspend fun Call.await(): Response = suspendCancellableCoroutine { block ->

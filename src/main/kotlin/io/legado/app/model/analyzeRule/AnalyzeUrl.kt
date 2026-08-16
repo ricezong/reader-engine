@@ -60,7 +60,7 @@ class AnalyzeUrl(
     private var charset: String? = null
     private var method = RequestMethod.GET
     private var proxy: String? = null
-    private var retry: Int = 0
+    private var retry: Int = 2
     private var useWebView: Boolean = false
     private var webJs: String? = null
 
@@ -272,8 +272,10 @@ class AnalyzeUrl(
 
     /**
      * 开始访问,并发判断
+     * 当需要等待时,自动 delay 等待,而非抛出 ConcurrentException,
+     * 避免连续请求时因并发率限制导致整批请求失败。
      */
-    private fun fetchStart(): ConcurrentRecord? {
+    private suspend fun fetchStart(): ConcurrentRecord? {
         source ?: return null
         val concurrentRate = source.concurrentRate
         if (concurrentRate.isNullOrEmpty()) {
@@ -286,43 +288,54 @@ class AnalyzeUrl(
             concurrentRecordMap[source.getKey()] = fetchRecord
             return fetchRecord
         }
-        val waitTime: Int = synchronized(fetchRecord) {
-            try {
-                if (rateIndex == -1) {
-                    if (fetchRecord.frequency > 0) {
-                        return@synchronized concurrentRate.toInt()
-                    }
-                    val nextTime = fetchRecord.time + concurrentRate.toInt()
-                    if (System.currentTimeMillis() >= nextTime) {
-                        fetchRecord.time = System.currentTimeMillis()
-                        fetchRecord.frequency = 1
-                        return@synchronized 0
-                    }
-                    return@synchronized (nextTime - System.currentTimeMillis()).toInt()
-                } else {
-                    val sj = concurrentRate.substring(rateIndex + 1)
-                    val nextTime = fetchRecord.time + sj.toInt()
-                    if (System.currentTimeMillis() >= nextTime) {
-                        fetchRecord.time = System.currentTimeMillis()
-                        fetchRecord.frequency = 1
-                        return@synchronized 0
-                    }
-                    val cs = concurrentRate.substring(0, rateIndex)
-                    if (fetchRecord.frequency > cs.toInt()) {
+        // 最多等待 60 秒,避免无限阻塞
+        val maxWaitMs = 60000L
+        var totalWaited = 0L
+        while (true) {
+            val waitTime: Int = synchronized(fetchRecord) {
+                try {
+                    if (rateIndex == -1) {
+                        if (fetchRecord.frequency > 0) {
+                            return@synchronized concurrentRate.toInt()
+                        }
+                        val nextTime = fetchRecord.time + concurrentRate.toInt()
+                        if (System.currentTimeMillis() >= nextTime) {
+                            fetchRecord.time = System.currentTimeMillis()
+                            fetchRecord.frequency = 1
+                            return@synchronized 0
+                        }
                         return@synchronized (nextTime - System.currentTimeMillis()).toInt()
                     } else {
-                        fetchRecord.frequency = fetchRecord.frequency + 1
-                        return@synchronized 0
+                        val sj = concurrentRate.substring(rateIndex + 1)
+                        val nextTime = fetchRecord.time + sj.toInt()
+                        if (System.currentTimeMillis() >= nextTime) {
+                            fetchRecord.time = System.currentTimeMillis()
+                            fetchRecord.frequency = 1
+                            return@synchronized 0
+                        }
+                        val cs = concurrentRate.substring(0, rateIndex)
+                        if (fetchRecord.frequency > cs.toInt()) {
+                            return@synchronized (nextTime - System.currentTimeMillis()).toInt()
+                        } else {
+                            fetchRecord.frequency = fetchRecord.frequency + 1
+                            return@synchronized 0
+                        }
                     }
+                } catch (e: Exception) {
+                    return@synchronized 0
                 }
-            } catch (e: Exception) {
-                return@synchronized 0
             }
+            if (waitTime <= 0) {
+                return fetchRecord
+            }
+            if (totalWaited >= maxWaitMs) {
+                // 等待超时,放弃并发限制,直接返回(避免无限阻塞)
+                return fetchRecord
+            }
+            val toWait = minOf(waitTime.toLong(), maxWaitMs - totalWaited)
+            kotlinx.coroutines.delay(toWait)
+            totalWaited += toWait
         }
-        if (waitTime > 0) {
-            throw ConcurrentException("根据并发率还需等待${waitTime}毫秒才可以访问", waitTime = waitTime)
-        }
-        return fetchRecord
     }
 
     /**
@@ -349,33 +362,35 @@ class AnalyzeUrl(
             return StrResponse(url, StringUtils.byteToHexString(getByteArrayAwait()))
         }
         val concurrentRecord = fetchStart()
-        setCookie(source?.getKey())
-        val strResponse: StrResponse
-        if (this.useWebView && useWebView) {
-            throw Exception("不支持webview")
-        } else {
-            strResponse = getProxyClient(proxy, debugLog).newCallStrResponse(retry) {
-                addHeaders(headerMap)
-                when (method) {
-                    RequestMethod.POST -> {
-                        url(urlNoQuery)
-                        val contentType = headerMap["Content-Type"]
-                        val body = body
-                        if (fieldMap.isNotEmpty() || body.isNullOrBlank()) {
-                            postForm(fieldMap, true)
-                        } else if (!contentType.isNullOrBlank()) {
-                            val requestBody = body.toRequestBody(contentType.toMediaType())
-                            post(requestBody)
-                        } else {
-                            postJson(body)
+        try {
+            setCookie(source?.getKey())
+            if (this.useWebView && useWebView) {
+                throw Exception("不支持webview")
+            } else {
+                val strResponse = getProxyClient(proxy, debugLog).newCallStrResponse(retry) {
+                    addHeaders(headerMap)
+                    when (method) {
+                        RequestMethod.POST -> {
+                            url(urlNoQuery)
+                            val contentType = headerMap["Content-Type"]
+                            val body = body
+                            if (fieldMap.isNotEmpty() || body.isNullOrBlank()) {
+                                postForm(fieldMap, true)
+                            } else if (!contentType.isNullOrBlank()) {
+                                val requestBody = body.toRequestBody(contentType.toMediaType())
+                                post(requestBody)
+                            } else {
+                                postJson(body)
+                            }
                         }
+                        else -> get(urlNoQuery, fieldMap, true)
                     }
-                    else -> get(urlNoQuery, fieldMap, true)
                 }
+                return strResponse
             }
+        } finally {
+            fetchEnd(concurrentRecord)
         }
-        fetchEnd(concurrentRecord)
-        return strResponse
     }
 
     @JvmOverloads
@@ -395,54 +410,10 @@ class AnalyzeUrl(
      */
     suspend fun getResponseAwait(): Response {
         val concurrentRecord = fetchStart()
-        setCookie(source?.getKey())
-        @Suppress("BlockingMethodInNonBlockingContext")
-        val response = getProxyClient(proxy).newCallResponse(retry) {
-            addHeaders(headerMap)
-            when (method) {
-                RequestMethod.POST -> {
-                    url(urlNoQuery)
-                    val contentType = headerMap["Content-Type"]
-                    val body = body
-                    if (fieldMap.isNotEmpty() || body.isNullOrBlank()) {
-                        postForm(fieldMap, true)
-                    } else if (!contentType.isNullOrBlank()) {
-                        val requestBody = body.toRequestBody(contentType.toMediaType())
-                        post(requestBody)
-                    } else {
-                        postJson(body)
-                    }
-                }
-                else -> get(urlNoQuery, fieldMap, true)
-            }
-        }
-        fetchEnd(concurrentRecord)
-        return response
-    }
-
-    fun getResponse(): Response {
-        return runBlocking {
-            getResponseAwait()
-        }
-    }
-
-    /**
-     * 访问网站,返回ByteArray
-     */
-    suspend fun getByteArrayAwait(): ByteArray {
-        val concurrentRecord = fetchStart()
-
-        @Suppress("RegExpRedundantEscape")
-        val dataUriFindResult = dataUriRegex.find(urlNoQuery)
-        @Suppress("BlockingMethodInNonBlockingContext")
-        if (dataUriFindResult != null) {
-            val dataUriBase64 = dataUriFindResult.groupValues[1]
-            val byteArray = Base64.decode(dataUriBase64, Base64.DEFAULT)
-            fetchEnd(concurrentRecord)
-            return byteArray
-        } else {
+        try {
             setCookie(source?.getKey())
-            val byteArray = getProxyClient(proxy).newCallResponseBody(retry) {
+            @Suppress("BlockingMethodInNonBlockingContext")
+            val response = getProxyClient(proxy).newCallResponse(retry) {
                 addHeaders(headerMap)
                 when (method) {
                     RequestMethod.POST -> {
@@ -460,9 +431,57 @@ class AnalyzeUrl(
                     }
                     else -> get(urlNoQuery, fieldMap, true)
                 }
-            }.bytes()
+            }
+            return response
+        } finally {
             fetchEnd(concurrentRecord)
-            return byteArray
+        }
+    }
+
+    fun getResponse(): Response {
+        return runBlocking {
+            getResponseAwait()
+        }
+    }
+
+    /**
+     * 访问网站,返回ByteArray
+     */
+    suspend fun getByteArrayAwait(): ByteArray {
+        val concurrentRecord = fetchStart()
+        try {
+            @Suppress("RegExpRedundantEscape")
+            val dataUriFindResult = dataUriRegex.find(urlNoQuery)
+            @Suppress("BlockingMethodInNonBlockingContext")
+            if (dataUriFindResult != null) {
+                val dataUriBase64 = dataUriFindResult.groupValues[1]
+                val byteArray = Base64.decode(dataUriBase64, Base64.DEFAULT)
+                return byteArray
+            } else {
+                setCookie(source?.getKey())
+                val byteArray = getProxyClient(proxy).newCallResponseBody(retry) {
+                    addHeaders(headerMap)
+                    when (method) {
+                        RequestMethod.POST -> {
+                            url(urlNoQuery)
+                            val contentType = headerMap["Content-Type"]
+                            val body = body
+                            if (fieldMap.isNotEmpty() || body.isNullOrBlank()) {
+                                postForm(fieldMap, true)
+                            } else if (!contentType.isNullOrBlank()) {
+                                val requestBody = body.toRequestBody(contentType.toMediaType())
+                                post(requestBody)
+                            } else {
+                                postJson(body)
+                            }
+                        }
+                        else -> get(urlNoQuery, fieldMap, true)
+                    }
+                }.bytes()
+                return byteArray
+            }
+        } finally {
+            fetchEnd(concurrentRecord)
         }
     }
 

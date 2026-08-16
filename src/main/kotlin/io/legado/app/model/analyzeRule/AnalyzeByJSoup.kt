@@ -29,25 +29,38 @@ class AnalyzeByJSoup(doc: Any) {
 
     }
 
+    // 保留原始内容,每次解析时重新 parse,避免 Jsoup Document 被修改后缓存失效
+    private val rawDoc: Any = doc
     private var element: Element = parse(doc)
 
     /**
      * 获取列表
      */
-    internal fun getElements(rule: String) = getElements(element, rule)
+    internal fun getElements(rule: String): Elements {
+        // 每次重新 parse,避免 Jsoup Document 被前一次操作修改后缓存失效
+        element = parse(rawDoc)
+        return getElements(element, rule)
+    }
 
     /**
      * 合并内容列表,得到内容
      */
-    internal fun getString(ruleStr: String) =
-        if (ruleStr.isEmpty()) null
-        else getStringList(ruleStr).takeIf { it.isNotEmpty() }?.joinToString("\n")
+    internal fun getString(ruleStr: String): String? {
+        if (ruleStr.isEmpty()) return null
+        // 每次重新 parse,避免 Jsoup Document 被前一次操作修改后缓存失效
+        element = parse(rawDoc)
+        return getStringList(ruleStr).takeIf { it.isNotEmpty() }?.joinToString("\n")
+    }
 
     /**
      * 获取一个字符串
      */
-    internal fun getString0(ruleStr: String) =
-        getStringList(ruleStr).let { if (it.isEmpty()) "" else it[0] }
+    internal fun getString0(ruleStr: String): String {
+        if (ruleStr.isEmpty()) return ""
+        // 每次重新 parse,避免 Jsoup Document 被前一次操作修改后缓存失效
+        element = parse(rawDoc)
+        return getStringList(ruleStr).let { if (it.isEmpty()) "" else it[0] }
+    }
 
     /**
      * 获取所有内容列表
