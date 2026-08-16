@@ -30,7 +30,31 @@
 
 ## 快速开始
 
-### 1. 引入依赖
+### 1. 打包并安装到本地仓库
+
+```bash
+# 打包（自动安装 lib 下的本地依赖，生成 fat jar）
+mvn package -DskipTests
+```
+
+**Linux / macOS (bash):**
+
+```bash
+mvn install:install-file \
+  -Dfile=target/reader-engine-1.0.0.jar \
+  -DgroupId=cn.kong \
+  -DartifactId=reader-engine \
+  -Dversion=1.0.0 \
+  -Dpackaging=jar
+```
+
+**Windows (PowerShell):**
+
+```powershell
+mvn install:install-file "-Dfile=target/reader-engine-1.0.0.jar" "-DgroupId=cn.kong" "-DartifactId=reader-engine" "-Dversion=1.0.0" "-Dpackaging=jar"
+```
+
+### 2. 引入依赖
 
 ```xml
 <dependency>
@@ -40,7 +64,7 @@
 </dependency>
 ```
 
-### 2. 使用
+### 3. 使用
 
 ```java
 ReaderService service = ReaderService.getInstance();
