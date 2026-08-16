@@ -60,7 +60,7 @@ class AnalyzeUrl(
     private var charset: String? = null
     private var method = RequestMethod.GET
     private var proxy: String? = null
-    private var retry: Int = 2
+    private var retry: Int = 0
     private var useWebView: Boolean = false
     private var webJs: String? = null
 
@@ -288,8 +288,8 @@ class AnalyzeUrl(
             concurrentRecordMap[source.getKey()] = fetchRecord
             return fetchRecord
         }
-        // 最多等待 60 秒,避免无限阻塞
-        val maxWaitMs = 60000L
+        // 最多等待 5 秒
+        val maxWaitMs = 5000L
         var totalWaited = 0L
         while (true) {
             val waitTime: Int = synchronized(fetchRecord) {

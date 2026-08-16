@@ -1,0 +1,55 @@
+{
+  "bookSourceComment": "备用源URL：https://sma.yueyouxs.com\n备用源URL：http://m.suixkan.com",
+  "bookSourceGroup": "🎉 精选",
+  "bookSourceName": "🎉 阅友小说",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://sma.yueyouxs.com",
+  "customOrder": 37,
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "exploreUrl": "重磅推荐::/l/s/28/{{page}}.html\n男生必读::/l/s/29/{{page}}.html\n女生爱看::/l/s/30/{{page}}.html\n小编推荐::/l/s/31/{{page}}.html\n都市人生::/l/f/1100/{{page}}.html\n玄幻奇幻::/l/f/1101/{{page}}.html\n武侠仙侠::/l/f/1102/{{page}}.html\n军事历史::/l/f/1103/{{page}}.html\n科幻末世::/l/f/1104/{{page}}.html\n游戏体育::/l/f/1105/{{page}}.html\n热血青春::/l/f/1106/{{page}}.html\n悬疑灵异::/l/f/1107/{{page}}.html\n脑洞大开::/l/f/1108/{{page}}.html\n现代言情::/l/f/2100/{{page}}.html\n古代言情::/l/f/2101/{{page}}.html\n幻想言情::/l/f/2102/{{page}}.html\n穿越时空::/l/f/2104/{{page}}.html\n宫闱争斗::/l/f/2105/{{page}}.html\n豪门总裁::/l/f/2106/{{page}}.html\n婚恋爱情::/l/f/2107/{{page}}.html\n经商种田::/l/f/2108/{{page}}.html\n出版读物::/l/f/3101/{{page}}.html\n文学小说::/l/f/3102/{{page}}.html\n古代典籍::/l/f/3103/{{page}}.html",
+  "lastUpdateTime": 1734370645036,
+  "respondTime": 1471,
+  "ruleBookInfo": {
+    "author": ".face-info@span.0@text##.*：",
+    "coverUrl": ".face-cover@img@src",
+    "init": "",
+    "intro": "id.intro@text##(^|[。！？]+[”」）】]?)##$1<br>",
+    "kind": ".face-info@span.1:3@text&&id.idNewIds@id.chapter-ps-id@text##.*：",
+    "lastChapter": "id.idNewIds@.chapter-entrance@text##正文卷.|正文.|VIP卷.|默认卷.|卷_|VIP章节.|免费章节.|章节目录.|最新章节.|[\\(（【].*?[求更票谢乐发订合补加架字修Kk].*?[】）\\)]",
+    "name": ".face-info-title@text",
+    "tocUrl": ".sumchapter@a@href",
+    "wordCount": ".face-info@span.2@text##.*："
+  },
+  "ruleContent": {
+    "content": ".con@html",
+    "replaceRegex": "##[\\(（]本章未完.*[）\\)]|[\\(（]本章完[）\\)]"
+  },
+  "ruleExplore": {
+    "author": ".v-author@text##\\s",
+    "bookList": ".v-list-item",
+    "bookUrl": "@onclick@js:result.match(/\\('(.*?)'\\)/)[1]",
+    "coverUrl": "img@src",
+    "intro": ".v-intro@text",
+    "name": ".v-title@text",
+    "wordCount": ".v-words@text"
+  },
+  "ruleSearch": {
+    "author": ".v-author@text##\\s",
+    "bookList": ".v-list-item",
+    "bookUrl": "@onclick@js:result.match(/\\('(.*?)', '', ''\\)/)[1]",
+    "coverUrl": "img@src",
+    "intro": ".v-intro@text",
+    "kind": ".base-label@text",
+    "name": ".v-title@text",
+    "wordCount": ".v-words@text"
+  },
+  "ruleToc": {
+    "chapterList": ".catalog_ls@li@a",
+    "chapterName": "text##正文卷.|正文.|VIP卷.|默认卷.|卷_|VIP章节.|免费章节.|章节目录.|最新章节.|[\\(（【].*?[求更票谢乐发订合补加架字修Kk].*?[】）\\)]",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "/s/1.html?keyword={{key}}&page={{page}}",
+  "weight": 0
+}

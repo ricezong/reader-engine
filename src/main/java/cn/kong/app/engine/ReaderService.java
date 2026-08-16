@@ -11,12 +11,19 @@ import io.legado.app.data.entities.BookSource;
 import io.legado.app.data.entities.SearchBook;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.InputStream;
+import java.net.JarURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.List;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 /**
  * ReaderService - 阅读引擎服务入口
@@ -59,31 +66,20 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <h3>内置书源简称</h3>
  * <pre>
- * 小说源：novel_1 / novel_2 / novel_3 / novel_4
- * 漫画源：comic_1 / comic_2 / comic_3 / comic_4
+ * 小说源：novel_1 ~ novel_11 ...
+ * 漫画源：comic_1 ~ comic_4 ...
  * </pre>
- * 简称即为内置源文件名去掉 .json 后缀，换源时直接替换 JSON 文件内容即可，无需改代码。
+ * 简称即为内置源文件名去掉 .json 后缀。
+ * 源文件从 classpath 的 sources/ 目录动态扫描，新增/删除源文件无需改代码。
  */
 public class ReaderService {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ReaderService.class);
 
-    private static final String BUILTIN_DIR = "/builtin/";
+    private static final String SOURCES_DIR = "/sources/";
 
-    /** 内置源文件名（文件名前缀即 source 简称） */
-    private static final String[] BUILTIN_NOVEL_FILES = {
-            "novel_1.json",
-            "novel_2.json",
-            "novel_3.json",
-            "novel_4.json"
-    };
-
-    private static final String[] BUILTIN_COMIC_FILES = {
-            "comic_1.json",
-            "comic_2.json",
-            "comic_3.json",
-            "comic_4.json"
-    };
+    /** 漫画源文件前缀（用于判断加载时是否需要 initSource） */
+    private static final String COMIC_PREFIX = "comic_";
 
     private static final int TYPE_NOVEL = 0;
     private static final int TYPE_COMIC = 2;
@@ -96,7 +92,7 @@ public class ReaderService {
     private final ConcurrentHashMap<String, BookSource> sourceMap = new ConcurrentHashMap<>();
 
     private ReaderService() {
-        loadBuiltinSources();
+        loadSources();
     }
 
     public static ReaderService getInstance() {
@@ -516,7 +512,7 @@ public class ReaderService {
     }
 
     /**
-     * 聚合搜索
+     * 聚合搜索（结果按匹配度排序）
      */
     private List<SearchResult> doSearch(List<BookSource> sources, String keyword, int page) {
         List<SearchResult> allResults = new ArrayList<>();
@@ -530,11 +526,12 @@ public class ReaderService {
                 log.warn("搜索失败 [{}] in [{}]: {}", keyword, source.getBookSourceName(), e.getMessage());
             }
         }
+        sortByRelevance(allResults, keyword);
         return allResults;
     }
 
     /**
-     * 按作者搜索并过滤
+     * 按作者搜索并过滤（结果按匹配度排序）
      */
     private List<SearchResult> doSearchByAuthor(List<BookSource> sources, String author, int page) {
         List<SearchResult> allResults = new ArrayList<>();
@@ -550,7 +547,73 @@ public class ReaderService {
                 log.warn("按作者搜索失败 [{}] in [{}]: {}", author, source.getBookSourceName(), e.getMessage());
             }
         }
+        sortByRelevance(allResults, author);
         return allResults;
+    }
+
+    // ==================== 搜索排序 ====================
+
+    /**
+     * 按匹配度从高到低排序搜索结果。
+     * <p>
+     * 匹配度规则（优先级从高到低）：
+     * <ol>
+     *   <li>书名完全匹配关键词（忽略大小写）</li>
+     *   <li>书名以关键词开头</li>
+     *   <li>书名包含关键词</li>
+     *   <li>作者名包含关键词</li>
+     *   <li>其他（按原名顺序）</li>
+     * </ol>
+     *
+     * @param results 搜索结果列表（原地排序）
+     * @param keyword 搜索关键词
+     */
+    private static void sortByRelevance(List<SearchResult> results, String keyword) {
+        if (keyword == null || keyword.isEmpty() || results.size() <= 1) {
+            return;
+        }
+        final String kw = keyword.toLowerCase();
+        results.sort((a, b) -> {
+            int scoreA = relevanceScore(a, kw);
+            int scoreB = relevanceScore(b, kw);
+            if (scoreA != scoreB) {
+                return Integer.compare(scoreB, scoreA); // 降序
+            }
+            // 匹配度相同时，按书名长度升序（短名优先）
+            int lenA = a.getName() == null ? Integer.MAX_VALUE : a.getName().length();
+            int lenB = b.getName() == null ? Integer.MAX_VALUE : b.getName().length();
+            return Integer.compare(lenA, lenB);
+        });
+    }
+
+    /**
+     * 计算单条搜索结果的匹配度得分。
+     *
+     * @param r   搜索结果
+     * @param kw  小写化后的关键词
+     * @return 得分（越高越匹配）
+     */
+    private static int relevanceScore(SearchResult r, String kw) {
+        int score = 0;
+        String name = r.getName();
+        String author = r.getAuthor();
+
+        if (name != null) {
+            String nameLower = name.toLowerCase();
+            if (nameLower.equals(kw)) {
+                score += 100;        // 完全匹配
+            } else if (nameLower.startsWith(kw)) {
+                score += 80;         // 开头匹配
+            } else if (nameLower.contains(kw)) {
+                score += 50;         // 包含匹配
+            }
+        }
+
+        if (author != null && author.toLowerCase().contains(kw)) {
+            score += 30;             // 作者名包含
+        }
+
+        return score;
     }
 
     // ==================== DTO 转换 ====================
@@ -611,39 +674,86 @@ public class ReaderService {
 
     // ==================== 内置源加载 ====================
 
-    private void loadBuiltinSources() {
+    private void loadSources() {
         log.info("开始加载内置书源...");
+        List<String> sourceFiles = scanSourcesResources();
+        log.info("扫描到 {} 个内置源文件: {}", sourceFiles.size(), sourceFiles);
         int count = 0;
-        for (String file : BUILTIN_NOVEL_FILES) {
+        for (String file : sourceFiles) {
             try {
-                BookSource source = loadBuiltinSource(file);
-                if (source != null) {
-                    String sourceKey = extractSourceKey(file);
-                    sourceMap.put(sourceKey, source);
-                    count++;
-                    log.info("加载内置小说源: {} | 简称: {} | URL: {}",
-                            source.getBookSourceName(), sourceKey, source.getBookSourceUrl());
+                BookSource source = loadSource(file);
+                if (source == null) {
+                    continue;
                 }
-            } catch (Exception e) {
-                log.error("加载内置小说源失败: {}", file, e);
-            }
-        }
-        for (String file : BUILTIN_COMIC_FILES) {
-            try {
-                BookSource source = loadBuiltinSource(file);
-                if (source != null) {
+                String sourceKey = extractSourceKey(file);
+                boolean isComic = file.startsWith(COMIC_PREFIX);
+                if (isComic) {
                     ReaderEngine.initSource(source);
-                    String sourceKey = extractSourceKey(file);
-                    sourceMap.put(sourceKey, source);
-                    count++;
-                    log.info("加载内置漫画源: {} | 简称: {} | URL: {}",
-                            source.getBookSourceName(), sourceKey, source.getBookSourceUrl());
                 }
+                sourceMap.put(sourceKey, source);
+                count++;
+                log.info("加载内置{}: {} | 简称: {} | URL: {}",
+                        isComic ? "漫画源" : "小说源",
+                        source.getBookSourceName(), sourceKey, source.getBookSourceUrl());
             } catch (Exception e) {
-                log.error("加载内置漫画源失败: {}", file, e);
+                log.error("加载内置源失败: {}", file, e);
             }
         }
         log.info("内置书源加载完成，共 {} 个", count);
+    }
+
+    /**
+     * 扫描 classpath 的 sources/ 目录下所有 .json 文件。
+     * <p>
+     * 兼容两种运行环境：
+     * <ul>
+     *   <li>开发期：资源在 src/main/resources 目录中，直接列文件</li>
+     *   <li>打包后：资源在 jar 内，通过 JarFile 遍历条目</li>
+     * </ul>
+     *
+     * @return 按文件名排序的源文件名列表（如 novel_1.json, novel_2.json, ...）
+     */
+    private List<String> scanSourcesResources() {
+        TreeSet<String> fileSet = new TreeSet<>();
+        try {
+            URL dirUrl = getClass().getResource(SOURCES_DIR);
+            if (dirUrl == null) {
+                log.warn("未找到内置源目录: {}", SOURCES_DIR);
+                return new ArrayList<>();
+            }
+            String protocol = dirUrl.getProtocol();
+            if ("file".equals(protocol)) {
+                // 开发期：资源在文件系统中
+                File dir = new File(dirUrl.toURI());
+                File[] files = dir.listFiles((d, name) -> name.endsWith(".json"));
+                if (files != null) {
+                    for (File f : files) {
+                        fileSet.add(f.getName());
+                    }
+                }
+            } else if ("jar".equals(protocol)) {
+                // 打包后：资源在 jar 内
+                JarURLConnection jarConn = (JarURLConnection) dirUrl.openConnection();
+                try (JarFile jar = jarConn.getJarFile()) {
+                    Enumeration<JarEntry> entries = jar.entries();
+                    String entryPrefix = "sources/";
+                    while (entries.hasMoreElements()) {
+                        JarEntry entry = entries.nextElement();
+                        String name = entry.getName();
+                        if (name.startsWith(entryPrefix) && name.endsWith(".json")
+                                && !name.endsWith("/")) {
+                            // 提取文件名：sources/novel_1.json → novel_1.json
+                            fileSet.add(name.substring(name.lastIndexOf('/') + 1));
+                        }
+                    }
+                }
+            } else {
+                log.warn("不支持的资源协议: {}", protocol);
+            }
+        } catch (Exception e) {
+            log.error("扫描内置源目录失败", e);
+        }
+        return new ArrayList<>(fileSet);
     }
 
     /**
@@ -656,8 +766,8 @@ public class ReaderService {
         return filename;
     }
 
-    private BookSource loadBuiltinSource(String filename) throws Exception {
-        try (InputStream is = getClass().getResourceAsStream(BUILTIN_DIR + filename)) {
+    private BookSource loadSource(String filename) throws Exception {
+        try (InputStream is = getClass().getResourceAsStream(SOURCES_DIR + filename)) {
             if (is == null) {
                 log.warn("内置源文件不存在: {}", filename);
                 return null;

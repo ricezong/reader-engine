@@ -12,7 +12,7 @@
 - 使用 Jsoup / XPath / JsonPath / CSS 选择器解析网页和 JSON 数据
 - 通过 Rhino JS 引擎执行书源中的自定义 JavaScript 规则
 - 支持小说源（`bookSourceType=0`）和漫画源（`bookSourceType=2`）
-- 内置 4 个小说源 + 4 个漫画源，开箱即用
+- 内置 11 个小说源 + 4 个漫画源，开箱即用
 
 ### 技术栈
 
@@ -83,23 +83,34 @@ List<ChapterContent> contents = service.batchDownload(r.getBookUrl(), r.getSourc
 
 ## 内置书源
 
-### 小说源（4 个）
+源文件位于 `src/main/resources/sources/` 目录下，引擎启动时自动扫描该目录下所有 `.json` 文件并加载。简称即为文件名去掉 `.json` 后缀。新增或删除源文件无需改代码，重启即可生效。
+
+> 命名约定：小说源文件以 `novel_` 为前缀，漫画源文件以 `comic_` 为前缀。
+
+### 小说源（当前 11 个）
 
 | 源名称 | 简称(source) | URL |
 |--------|-------------|-----|
-| 八零小说 | `novel_1` | `http://www.80ge.info` |
-| 独步小说 | `novel_2` | `https://www.dbxsd.com` |
-| 猫眼看书 | `novel_3` | `http://api.lemiyigou.com` |
-| 七猫小说 | `novel_4` | `https://api-bc.wtzw.com` |
+| 独步小说 | `novel_1` | `https://www.dbxsd.com` |
+| 八零小说 | `novel_2` | `http://www.80ge.info` |
+| 企鹅阅读 | `novel_3` | `https://bookshelf.html5.qq.com` |
+| 酷我小说 | `novel_4` | `http://appi.kuwo.cn` |
+| 唐三中文 | `novel_5` | `http://www.xtangsanshu.com` |
+| 蚂蚁文学 | `novel_6` | `https://www.mayiwsk.com` |
+| 若雨中文 | `novel_7` | `http://www.3yt.la` |
+| 阅友小说 | `novel_8` | `https://sma.yueyouxs.com` |
+| 猪猪书网 | `novel_9` | `http://www.zzs5.net` |
+| 文桑小说 | `novel_10` | `http://www.wensang.net` |
+| 玄幻阁网 | `novel_11` | `http://www.xuanyge.org` |
 
-### 漫画源（4 个）
+### 漫画源（当前 4 个）
 
 | 源名称 | 简称(source) | URL |
 |--------|-------------|-----|
-| G站漫画 | `comic_1` | `https://godamanga.com` |
-| 漫画台 | `comic_2` | `https://m.manhuatai.com` |
-| 如漫画 | `comic_3` | `https://www.rumanhua.com` |
-| 再漫画 | `comic_4` | `https://www.zaimanhua.com` |
+| 包子漫画 | `comic_1` | `https://www.baozimh.com` |
+| 看漫画 | `comic_2` | `https://m.kanman.com` |
+| 漫画台 | `comic_3` | `https://m.manhuatai.com` |
+| 漫画屋 | `comic_4` | `https://www.mhua5.com` |
 
 > 获取详情/目录/正文时传入 `source` 简称即可，无需传完整 URL。
 
@@ -108,6 +119,8 @@ List<ChapterContent> contents = service.batchDownload(r.getBookUrl(), r.getSourc
 ### ReaderService（推荐）
 
 单例服务入口，用户只需传入 `String` 参数和简单 DTO，无需接触内部实体对象。
+
+> **异常处理**：所有方法在执行失败时抛出 `SourceException`，消息格式为 `[环节] ✗ 书源 [简称](名称) 失败: 详情 | 原因: xxx`，可直接展示给用户。
 
 #### 获取实例
 
@@ -225,6 +238,8 @@ ReaderService service = ReaderService.getInstance();
 
 如果需要直接操作书源对象，可使用底层 API：
 
+> 所有方法在失败时抛出 `SourceException`，已封装好书源信息和出错环节。
+
 | 方法 | 说明 |
 |------|------|
 | `parseBookSource(String json)` | 解析单个书源 |
@@ -334,12 +349,15 @@ public class BookService {
 ```
 reader-engine/
 ├── pom.xml
+├── lib/
+│   └── rhino-1.7.13-1.jar                            # Rhino JS 引擎 (本地依赖)
 ├── src/
 │   ├── main/
 │   │   ├── java/
 │   │   │   ├── cn/kong/app/engine/
 │   │   │   │   ├── ReaderEngine.java                # 底层 API (直接操作书源对象)
 │   │   │   │   ├── ReaderService.java               # 高层 API (通用方法，推荐使用)
+│   │   │   │   ├── SourceException.java             # 统一异常封装
 │   │   │   │   └── dto/                             # 通用 DTO
 │   │   │   │       ├── SourceInfo.java              #   书源信息
 │   │   │   │       ├── SearchResult.java            #   搜索结果
@@ -362,13 +380,12 @@ reader-engine/
 │   │   │   │   └── webBook/                         # WebBook 核心逻辑
 │   │   │   └── utils/                               # 工具类
 │   │   └── resources/
-│   │       └── builtin/                             # 内置书源 JSON (8 个)
+│   │       └── sources/                             # 内置书源 JSON (15 个)
 │   └── test/
-│       └── java/cn/kong/app/
-│           ├── engine/ReaderServiceTest.java         # 服务测试 (10 个)
-│           └── model/
-│               ├── NovelSourceTest.java              # 小说源测试
-│               └── ComicSourceTest.java              # 漫画源测试
+│       ├── java/cn/kong/app/
+│       │   └── engine/
+│       │       └── ReaderServiceTest.java           # 全书源矩阵测试
+│       └── resources/                               # 测试用书源 JSON (15 个)
 ```
 
 ## 架构说明
@@ -395,23 +412,25 @@ Rhino JS 引擎 (执行书源 JS 规则)
 
 1. **分层架构**：`ReaderService`（高层服务）封装 `ReaderEngine`（底层引擎），高层使用 DTO + 简单参数，底层操作内部实体对象。
 
-2. **通用 DTO**：用户不接触 `SearchBook`/`Book`/`BookChapter` 等内部对象，统一使用 `SourceInfo`/`SearchResult`/`BookDetail`/`ChapterInfo`/`ChapterContent`。
+2. **统一异常封装**：`ReaderEngine` 在所有操作中将原始异常包装为 `SourceException`，包含书源简称、书源名称、环节（搜索/详情/目录/正文/初始化/解析）和原始异常原因。`ReaderService` 直接透传，不重复包装。
 
-3. **Book 缓存**：`ReaderService` 内部缓存 Book 对象（`source + bookUrl` 为 key），避免获取目录和正文时重复请求详情页。
+3. **通用 DTO**：用户不接触 `SearchBook`/`Book`/`BookChapter` 等内部对象，统一使用 `SourceInfo`/`SearchResult`/`BookDetail`/`ChapterInfo`/`ChapterContent`。
 
-4. **Kotlin 协程桥接**：Kotlin 的 `WebBook.kt` 使用 `suspend` 函数，通过 `ReaderEngineBridge.kt` 的 `runBlocking` 桥接为同步方法。
+4. **Book 缓存**：`ReaderService` 内部缓存 Book 对象（`source + bookUrl` 为 key），避免获取目录和正文时重复请求详情页。
 
-5. **jsLib 预加载**：书源可定义 `jsLib`，在 `BaseSource.evalJS` 中自动拼接到用户 JS 前执行。
+5. **Kotlin 协程桥接**：Kotlin 的 `WebBook.kt` 使用 `suspend` 函数，通过 `ReaderEngineBridge.kt` 的 `runBlocking` 桥接为同步方法。
 
-6. **漫画源 variable 初始化**：漫画源依赖 `variable` 存储 URL、cookie 等，加载时自动执行 `initSource()` 初始化。
+6. **jsLib 预加载**：书源可定义 `jsLib`，在 `BaseSource.evalJS` 中自动拼接到用户 JS 前执行。
 
-7. **无 Spring Boot 依赖**：引擎本身不依赖 Spring Boot，`ReaderService` 首次调用 `getInstance()` 时通过 `static` 初始化块预热 JS 引擎和 HTTP 客户端，可在任何 Java 项目中使用。
+7. **漫画源 variable 初始化**：漫画源依赖 `variable` 存储 URL、cookie 等，加载时自动执行 `initSource()` 初始化。
+
+8. **无 Spring Boot 依赖**：引擎本身不依赖 Spring Boot，`ReaderService` 首次调用 `getInstance()` 时通过 `static` 初始化块预热 JS 引擎和 HTTP 客户端，可在任何 Java 项目中使用。
 
 ## 构建
 
 ### 环境要求
 
-- JDK 11+
+- JDK 8+
 - Maven 3.6+
 
 ### 编译打包
@@ -431,18 +450,35 @@ mvn test -Dtest="cn.kong.app.engine.ReaderServiceTest"
 
 ## 测试
 
-| 测试项 | 结果 |
-|--------|------|
-| 内置源加载 | 4 小说 + 4 漫画 = 8 个 |
-| 搜索小说（斗破苍穹） | 128 本（4 源聚合） |
-| 搜索漫画（哑舍） | 35 本（4 源聚合） |
-| 搜索全部（斗破苍穹） | 186 本（8 源聚合） |
-| 按作者搜索（天蚕土豆） | 通过 |
-| 获取详情 | 通过 |
-| 获取目录 | 通过 |
-| 获取正文 | 通过 |
-| 批量下载（3 章） | 通过 |
-| 漫画完整流程 | 通过 |
+### ReaderServiceTest — 全书源矩阵测试
+
+全书源逐源逐关键词详细测试，覆盖搜索 → 详情 → 目录 → 正文完整链路：
+
+```
+小说源 (动态扫描) × 小说关键词 (4): 斗破苍穹, 斗罗大陆, 大主宰, 神通者
+漫画源 (动态扫描) × 漫画关键词 (4): 斗破苍穹, 偷星九月天, 一人之下, 大主宰
+合计: 15 源 × 4 关键词 × 4 环节 = 240 个验证点
+```
+
+测试结果汇总输出包含三个维度的统计：
+
+- **按环节统计**：搜索 / 详情 / 目录 / 正文 各自的通过/失败
+- **按书源统计**：每个书源在四个环节的通过·失败矩阵
+- **按分类×环节统计**：小说-搜索、漫画-正文 等交叉分类
+
+示例汇总输出：
+
+```
+  按书源统计 (搜索/详情/目录/正文 各环节 通过·失败):
+    书源        搜索           详情           目录           正文           总计      状态
+    ──────────────────────────────────────────────────────────────────────────────────
+    [novel_1]  4·0            4·0            4·0            4·0            16·0     ✓
+    [novel_2]  3·1✗           4·0            4·0            3·1✗           14·2     ✗
+    [comic_3]  4·0            4·0            3·1✗           4·0            15·1     ✗
+    [novel_10]  4·0           4·0            4·0            4·0            16·0     ✓
+    [novel_11]  4·0           4·0            4·0            4·0            16·0     ✓
+    ...
+```
 
 ## FAQ
 

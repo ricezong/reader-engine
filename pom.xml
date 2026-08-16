@@ -323,7 +323,7 @@
                 <version>3.2.5</version>
             </plugin>
 
-            <!-- Shade 插件：将所有依赖打包进最终 jar（fat jar），解决其他环境缺少依赖的问题 -->
+            <!-- Shade 插件：将所有依赖打包进最终 jar -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
