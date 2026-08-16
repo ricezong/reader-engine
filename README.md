@@ -30,26 +30,7 @@
 
 ## 快速开始
 
-### 1. 安装 jar 到本地仓库
-
-**Linux / macOS (bash):**
-
-```bash
-mvn install:install-file \
-  -Dfile=target/reader-engine-1.0.0.jar \
-  -DgroupId=cn.kong \
-  -DartifactId=reader-engine \
-  -Dversion=1.0.0 \
-  -Dpackaging=jar
-```
-
-**Windows (PowerShell):**
-
-```powershell
-mvn install:install-file "-Dfile=target/reader-engine-1.0.0.jar" "-DgroupId=cn.kong" "-DartifactId=reader-engine" "-Dversion=1.0.0" "-Dpackaging=jar"
-```
-
-### 2. 引入依赖
+### 1. 引入依赖
 
 ```xml
 <dependency>
@@ -59,7 +40,7 @@ mvn install:install-file "-Dfile=target/reader-engine-1.0.0.jar" "-DgroupId=cn.k
 </dependency>
 ```
 
-### 3. 使用
+### 2. 使用
 
 ```java
 ReaderService service = ReaderService.getInstance();
@@ -160,6 +141,8 @@ ReaderService service = ReaderService.getInstance();
 
 返回 `List<SearchResult>`，每个结果包含：
 
+> 搜索结果按关键词匹配度从高到低排序（完全匹配 > 开头匹配 > 包含匹配 > 作者包含）。
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `name` | String | 书名 |
@@ -178,6 +161,7 @@ ReaderService service = ReaderService.getInstance();
 | 方法 | 参数 | 说明 |
 |------|------|------|
 | `searchByAuthor(String author)` | 作者名 | 跨所有源 |
+| `searchByAuthor(String author, int page)` | 作者名, 页码 | 跨所有源指定页 |
 | `searchNovelByAuthor(String author)` | 作者名 | 仅小说源 |
 | `searchComicByAuthor(String author)` | 作者名 | 仅漫画源 |
 
@@ -380,12 +364,11 @@ reader-engine/
 │   │   │   │   └── webBook/                         # WebBook 核心逻辑
 │   │   │   └── utils/                               # 工具类
 │   │   └── resources/
-│   │       └── sources/                             # 内置书源 JSON (15 个)
+│   │       └── sources/                             # 内置书源 JSON (11 小说 + 4 漫画)
 │   └── test/
-│       ├── java/cn/kong/app/
-│       │   └── engine/
-│       │       └── ReaderServiceTest.java           # 全书源矩阵测试
-│       └── resources/                               # 测试用书源 JSON (15 个)
+│       └── java/cn/kong/app/
+│           └── engine/
+│               └── ReaderServiceTest.java           # 全书源矩阵测试
 ```
 
 ## 架构说明
@@ -426,6 +409,8 @@ Rhino JS 引擎 (执行书源 JS 规则)
 
 8. **无 Spring Boot 依赖**：引擎本身不依赖 Spring Boot，`ReaderService` 首次调用 `getInstance()` 时通过 `static` 初始化块预热 JS 引擎和 HTTP 客户端，可在任何 Java 项目中使用。
 
+9. **搜索结果排序**：全局搜索和单源搜索均按关键词匹配度从高到低排序，评分规则：书名完全匹配（100分）> 书名开头匹配（80分）> 书名包含匹配（60分）> 作者包含匹配（40分），确保最相关的结果排在最前面。
+
 ## 构建
 
 ### 环境要求
@@ -445,6 +430,8 @@ mvn test
 # 运行特定测试
 mvn test -Dtest="cn.kong.app.engine.ReaderServiceTest"
 ```
+
+> **零配置构建**：`lib/rhino-1.7.13-1.jar` 通过 `maven-install-plugin` 在 `validate` 阶段自动安装到本地 Maven 仓库，换环境无需手动执行 `install-file`。
 
 构建产物：`target/reader-engine-1.0.0.jar`（fat jar，包含 kotlin-stdlib、okhttp、jsoup、rhino、gson、hutool、kotlin-logging 等所有运行时依赖，不包含 slf4j-api）
 
@@ -492,9 +479,7 @@ ReaderEngine.initSource(source);
 
 ### Q: 打包时 rhino 依赖找不到？
 
-```bash
-mvn install:install-file "-Dfile=lib/rhino-1.7.13-1.jar" "-DgroupId=com.github.gedoor" "-DartifactId=rhino-android" "-Dversion=1.7.13-1" "-Dpackaging=jar"
-```
+不需要手动安装。`pom.xml` 中配置了 `maven-install-plugin`，在 `validate` 阶段自动将 `lib/rhino-1.7.13-1.jar` 安装到本地 Maven 仓库。直接执行 `mvn package` 即可。
 
 ### Q: 报 NoClassDefFoundError: mu/KotlinLogging？
 
