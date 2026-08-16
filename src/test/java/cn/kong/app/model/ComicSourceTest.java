@@ -30,10 +30,10 @@ public class ComicSourceTest {
     private static final Logger log = LoggerFactory.getLogger(ComicSourceTest.class);
 
     private static final String[] SOURCES = {
-            "comic_godamanga.json",      // G站漫画
-            "comic_manhuatai.json",      // 漫画台
-            "comic_rumanhua.json",       // 如漫画
-            "comic_zaimanhua.json"       // 再漫画
+            "comic_1.json",       // G站漫画
+            "comic_2.json",       // 漫画台
+            "comic_3.json",       // 如漫画
+            "comic_4.json"        // 再漫画
     };
 
     private static final String[] KEYWORDS = {

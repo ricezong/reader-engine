@@ -16,7 +16,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -25,6 +24,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * 对外提供书源管理、搜索、详情、目录、正文等一站式 API。
  * 用户不需要接触 SearchBook / Book / BookChapter 等内部对象，
  * 只需传入简单参数（关键词、URL、source 简称、序号）即可完成全部操作。
+ * <p>
+ * 异常处理：底层 {@link ReaderEngine} 已统一封装为 {@link SourceException}，
+ * 本层不再重复包装，直接透传。仅在本层独有的逻辑（如 resolveSource、章节序号越界）
+ * 处封装异常。
  *
  * <h3>API 总览</h3>
  * <pre>
@@ -56,9 +59,10 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <h3>内置书源简称</h3>
  * <pre>
- * 小说源：80 / dubu / maoyan / qimao
- * 漫画源：godamanga / manhuatai / rumanhua / zaimanhua
+ * 小说源：novel_1 / novel_2 / novel_3 / novel_4
+ * 漫画源：comic_1 / comic_2 / comic_3 / comic_4
  * </pre>
+ * 简称即为内置源文件名去掉 .json 后缀，换源时直接替换 JSON 文件内容即可，无需改代码。
  */
 public class ReaderService {
 
@@ -66,19 +70,19 @@ public class ReaderService {
 
     private static final String BUILTIN_DIR = "/builtin/";
 
-    /** 内置源文件名（前缀即简称） */
+    /** 内置源文件名（文件名前缀即 source 简称） */
     private static final String[] BUILTIN_NOVEL_FILES = {
-            "novel_80.json",
-            "novel_dubu.json",
-            "novel_maoyan.json",
-            "novel_qimao.json"
+            "novel_1.json",
+            "novel_2.json",
+            "novel_3.json",
+            "novel_4.json"
     };
 
     private static final String[] BUILTIN_COMIC_FILES = {
-            "comic_godamanga.json",
-            "comic_manhuatai.json",
-            "comic_rumanhua.json",
-            "comic_zaimanhua.json"
+            "comic_1.json",
+            "comic_2.json",
+            "comic_3.json",
+            "comic_4.json"
     };
 
     private static final int TYPE_NOVEL = 0;
@@ -87,14 +91,9 @@ public class ReaderService {
     private static volatile ReaderService instance;
 
     /**
-     * 书源存储：key = bookSourceUrl, value = BookSource
+     * 书源存储：key = source 简称（文件名前缀，如 novel_1、comic_2），value = BookSource
      */
     private final ConcurrentHashMap<String, BookSource> sourceMap = new ConcurrentHashMap<>();
-
-    /**
-     * 书源简称映射：key = 简称(如 80), value = bookSourceUrl
-     */
-    private final ConcurrentHashMap<String, String> aliasMap = new ConcurrentHashMap<>();
 
     private ReaderService() {
         loadBuiltinSources();
@@ -231,7 +230,7 @@ public class ReaderService {
      * 在指定书源中搜索
      *
      * @param keyword 搜索关键词
-     * @param source  书源简称（如 80、dubu、godamanga 等）
+     * @param source  书源简称（如 novel_1、comic_2 等）
      * @return 搜索结果列表
      */
     public List<SearchResult> search(String keyword, String source) {
@@ -242,7 +241,7 @@ public class ReaderService {
      * 在指定书源中搜索（指定页码）
      *
      * @param keyword 搜索关键词
-     * @param source  书源简称（如 80、dubu、godamanga 等）
+     * @param source  书源简称（如 novel_1、comic_2 等）
      * @param page    页码（从 1 开始）
      * @return 搜索结果列表
      */
@@ -309,7 +308,7 @@ public class ReaderService {
      * 获取书籍详情
      *
      * @param bookUrl 书籍 URL（从搜索结果 SearchResult.getBookUrl() 获取）
-     * @param source  书源简称（从 SearchResult.getSource() 获取，如 80/dubu/godamanga 等）
+     * @param source  书源简称（从 SearchResult.getSource() 获取，如 novel_1/comic_2 等）
      * @return 书籍详情
      */
     public BookDetail getBookDetail(String bookUrl, String source) {
@@ -356,8 +355,8 @@ public class ReaderService {
         Book book = ReaderEngine.getBookInfo(src, bookUrl);
         List<BookChapter> chapters = ReaderEngine.getChapterList(src, book);
         if (chapterIndex < 0 || chapterIndex >= chapters.size()) {
-            throw new IndexOutOfBoundsException(
-                    "章节序号超出范围: " + chapterIndex + ", 总章节数: " + chapters.size());
+            throw SourceException.contentError(source, src.getBookSourceName(),
+                    "章节序号超出范围: " + chapterIndex + ", 总章节数: " + chapters.size(), null);
         }
         BookChapter chapter = chapters.get(chapterIndex);
         return ReaderEngine.getBookContent(src, book, chapter);
@@ -381,7 +380,8 @@ public class ReaderService {
                 return ReaderEngine.getBookContent(src, book, ch);
             }
         }
-        throw new IllegalArgumentException("找不到章节 URL: " + chapterUrl);
+        throw SourceException.contentError(source, src.getBookSourceName(),
+                "找不到章节 URL: " + chapterUrl, null);
     }
 
     // ==================== 7. 批量下载正文 ====================
@@ -416,26 +416,26 @@ public class ReaderService {
         Book book = ReaderEngine.getBookInfo(src, bookUrl);
         List<BookChapter> chapters = ReaderEngine.getChapterList(src, book);
         if (startIndex < 0 || startIndex >= chapters.size()) {
-            throw new IndexOutOfBoundsException("起始章节序号超出范围: " + startIndex);
+            throw SourceException.contentError(source, src.getBookSourceName(),
+                    "起始章节序号超出范围: " + startIndex, null);
         }
         int end = Math.min(endIndex, chapters.size());
         List<ChapterContent> contents = new ArrayList<>(end - startIndex);
         for (int i = startIndex; i < end; i++) {
             BookChapter chapter = chapters.get(i);
+            String content = null;
             try {
-                String content = ReaderEngine.getBookContent(src, book, chapter);
-                contents.add(new ChapterContent(chapter.getTitle(), chapter.getUrl(),
-                        chapter.getIndex(), content));
-                log.info("下载章节 [{}/{}]: {} | 长度: {}",
-                        i - startIndex + 1, end - startIndex,
-                        chapter.getTitle(), content == null ? 0 : content.length());
+                content = ReaderEngine.getBookContent(src, book, chapter);
             } catch (Exception e) {
                 log.error("下载章节失败 [{}/{}]: {} | {}",
                         i - startIndex + 1, end - startIndex,
                         chapter.getTitle(), e.getMessage());
-                contents.add(new ChapterContent(chapter.getTitle(), chapter.getUrl(),
-                        chapter.getIndex(), null));
             }
+            contents.add(new ChapterContent(chapter.getTitle(), chapter.getUrl(),
+                    chapter.getIndex(), content));
+            log.info("下载章节 [{}/{}]: {} | 长度: {}",
+                    i - startIndex + 1, end - startIndex,
+                    chapter.getTitle(), content == null ? 0 : content.length());
             if (delayMs > 0 && i < end - 1) {
                 try {
                     Thread.sleep(delayMs);
@@ -487,26 +487,17 @@ public class ReaderService {
     // ==================== 内部方法 ====================
 
     /**
-     * 根据简称或 URL 解析书源
+     * 根据 source 简称解析书源
      */
     private BookSource resolveSource(String source) {
         if (source == null || source.isEmpty()) {
-            throw new IllegalArgumentException("书源简称为空");
+            throw SourceException.sourceNotFound(source, sourceMap.keySet());
         }
-        // 先按简称查
-        String url = aliasMap.get(source);
-        if (url != null) {
-            BookSource src = sourceMap.get(url);
-            if (src != null) {
-                return src;
-            }
-        }
-        // 再按 URL 直接查
         BookSource src = sourceMap.get(source);
         if (src != null) {
             return src;
         }
-        throw new IllegalStateException("找不到书源: " + source + "，可用简称: " + aliasMap.keySet());
+        throw SourceException.sourceNotFound(source, sourceMap.keySet());
     }
 
     /**
@@ -566,7 +557,7 @@ public class ReaderService {
 
     private SourceInfo toSourceInfo(BookSource s) {
         return new SourceInfo(
-                findAlias(s.getBookSourceUrl()),
+                findSourceKey(s),
                 s.getBookSourceName(),
                 s.getBookSourceType(),
                 s.getBookSourceType() == TYPE_NOVEL ? "小说" : "漫画"
@@ -578,7 +569,7 @@ public class ReaderService {
         r.setName(sb.getName());
         r.setAuthor(sb.getAuthor());
         r.setBookUrl(sb.getBookUrl());
-        r.setSource(findAlias(source.getBookSourceUrl()));
+        r.setSource(findSourceKey(source));
         r.setSourceName(source.getBookSourceName());
         r.setCoverUrl(sb.getCoverUrl());
         r.setIntro(sb.getIntro());
@@ -595,7 +586,7 @@ public class ReaderService {
         d.setAuthor(book.getAuthor());
         d.setBookUrl(book.getBookUrl());
         d.setTocUrl(book.getTocUrl());
-        d.setSource(findAlias(source.getBookSourceUrl()));
+        d.setSource(findSourceKey(source));
         d.setSourceName(source.getBookSourceName());
         d.setCoverUrl(book.getCoverUrl());
         d.setIntro(book.getIntro());
@@ -607,15 +598,15 @@ public class ReaderService {
     }
 
     /**
-     * 根据书源 URL 查找简称
+     * 根据 BookSource 查找 source 简称
      */
-    private String findAlias(String sourceUrl) {
-        for (Map.Entry<String, String> entry : aliasMap.entrySet()) {
-            if (entry.getValue().equals(sourceUrl)) {
+    private String findSourceKey(BookSource source) {
+        for (java.util.Map.Entry<String, BookSource> entry : sourceMap.entrySet()) {
+            if (entry.getValue() == source || entry.getValue().equals(source)) {
                 return entry.getKey();
             }
         }
-        return sourceUrl;
+        return source.getBookSourceUrl();
     }
 
     // ==================== 内置源加载 ====================
@@ -627,12 +618,11 @@ public class ReaderService {
             try {
                 BookSource source = loadBuiltinSource(file);
                 if (source != null) {
-                    String alias = extractAliasFromFilename(file);
-                    sourceMap.put(source.getBookSourceUrl(), source);
-                    aliasMap.put(alias, source.getBookSourceUrl());
+                    String sourceKey = extractSourceKey(file);
+                    sourceMap.put(sourceKey, source);
                     count++;
                     log.info("加载内置小说源: {} | 简称: {} | URL: {}",
-                            source.getBookSourceName(), alias, source.getBookSourceUrl());
+                            source.getBookSourceName(), sourceKey, source.getBookSourceUrl());
                 }
             } catch (Exception e) {
                 log.error("加载内置小说源失败: {}", file, e);
@@ -643,12 +633,11 @@ public class ReaderService {
                 BookSource source = loadBuiltinSource(file);
                 if (source != null) {
                     ReaderEngine.initSource(source);
-                    String alias = extractAliasFromFilename(file);
-                    sourceMap.put(source.getBookSourceUrl(), source);
-                    aliasMap.put(alias, source.getBookSourceUrl());
+                    String sourceKey = extractSourceKey(file);
+                    sourceMap.put(sourceKey, source);
                     count++;
                     log.info("加载内置漫画源: {} | 简称: {} | URL: {}",
-                            source.getBookSourceName(), alias, source.getBookSourceUrl());
+                            source.getBookSourceName(), sourceKey, source.getBookSourceUrl());
                 }
             } catch (Exception e) {
                 log.error("加载内置漫画源失败: {}", file, e);
@@ -658,20 +647,13 @@ public class ReaderService {
     }
 
     /**
-     * 从文件名提取简称：novel_80.json → 80，comic_godamanga.json → godamanga
+     * 从文件名提取 source 简称：novel_1.json → novel_1，comic_2.json → comic_2
      */
-    private static String extractAliasFromFilename(String filename) {
-        // 去掉前缀 novel_ 或 comic_ 和后缀 .json
-        String name = filename;
-        if (name.startsWith("novel_")) {
-            name = name.substring(6);
-        } else if (name.startsWith("comic_")) {
-            name = name.substring(6);
+    private static String extractSourceKey(String filename) {
+        if (filename.endsWith(".json")) {
+            return filename.substring(0, filename.length() - 5);
         }
-        if (name.endsWith(".json")) {
-            name = name.substring(0, name.length() - 5);
-        }
-        return name;
+        return filename;
     }
 
     private BookSource loadBuiltinSource(String filename) throws Exception {

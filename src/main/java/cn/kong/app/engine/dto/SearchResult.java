@@ -13,7 +13,7 @@ public class SearchResult {
     private String author;
     /** 书籍详情页 URL（获取详情、目录、正文时需要传入） */
     private String bookUrl;
-    /** 书源简称（如 80、dubu、godamanga 等，获取详情/目录/正文时传入） */
+    /** 书源简称（如 novel_1、comic_2 等，获取详情/目录/正文时传入） */
     private String source;
     /** 书源名称 */
     private String sourceName;

@@ -19,9 +19,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * 全书源逐源逐关键词详细测试
  * <p>
  * 测试矩阵：
- *   小说源 (4): 80, dubu, maoyan, qimao
+ *   小说源 (4): novel_1, novel_2, novel_3, novel_4
  *     × 小说关键词 (4): 斗破苍穹, 斗罗大陆, 大主宰, 神通者
- *   漫画源 (4): godamanga, manhuatai, rumanhua, zaimanhua
+ *   漫画源 (4): comic_1, comic_2, comic_3, comic_4
  *     × 漫画关键词 (4): 斗破苍穹, 偷星九月天, 一人之下, 大主宰
  * <p>
  * 每个组合验证：搜索 → 详情 → 目录 → 正文 四个环节，并通过日志断言确实获取到对应信息。
@@ -36,12 +36,12 @@ public class FullSourceMatrixTest {
     private static ReaderService service;
 
     // 小说源简称
-    private static final String[] NOVEL_SOURCES = {"80", "dubu", "maoyan", "qimao"};
+    private static final String[] NOVEL_SOURCES = {"novel_1", "novel_2", "novel_3", "novel_4"};
     // 小说测试关键词
     private static final String[] NOVEL_KEYWORDS = {"斗破苍穹", "斗罗大陆", "大主宰", "神通者"};
 
     // 漫画源简称
-    private static final String[] COMIC_SOURCES = {"godamanga", "manhuatai", "rumanhua", "zaimanhua"};
+    private static final String[] COMIC_SOURCES = {"comic_1", "comic_2", "comic_3", "comic_4"};
     // 漫画测试关键词
     private static final String[] COMIC_KEYWORDS = {"斗破苍穹", "偷星九月天", "一人之下", "大主宰"};
 

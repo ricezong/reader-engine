@@ -7,7 +7,7 @@ package cn.kong.app.engine.dto;
  */
 public class SourceInfo {
 
-    /** 书源简称（如 80、dubu、godamanga 等） */
+    /** 书源简称（如 novel_1、comic_2 等） */
     private String source;
     /** 书源名称 */
     private String name;

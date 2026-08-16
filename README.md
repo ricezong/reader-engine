@@ -87,19 +87,19 @@ List<ChapterContent> contents = service.batchDownload(r.getBookUrl(), r.getSourc
 
 | 源名称 | 简称(source) | URL |
 |--------|-------------|-----|
-| 八零小说 | `80` | `http://www.80ge.info` |
-| 独步小说 | `dubu` | `https://www.dbxsd.com` |
-| 猫眼看书 | `maoyan` | `http://api.lemiyigou.com` |
-| 七猫小说 | `qimao` | `https://api-bc.wtzw.com` |
+| 八零小说 | `novel_1` | `http://www.80ge.info` |
+| 独步小说 | `novel_2` | `https://www.dbxsd.com` |
+| 猫眼看书 | `novel_3` | `http://api.lemiyigou.com` |
+| 七猫小说 | `novel_4` | `https://api-bc.wtzw.com` |
 
 ### 漫画源（4 个）
 
 | 源名称 | 简称(source) | URL |
 |--------|-------------|-----|
-| G站漫画 | `godamanga` | `https://godamanga.com` |
-| 漫画台 | `manhuatai` | `https://m.manhuatai.com` |
-| 如漫画 | `rumanhua` | `https://www.rumanhua.com` |
-| 再漫画 | `zaimanhua` | `https://www.zaimanhua.com` |
+| G站漫画 | `comic_1` | `https://godamanga.com` |
+| 漫画台 | `comic_2` | `https://m.manhuatai.com` |
+| 如漫画 | `comic_3` | `https://www.rumanhua.com` |
+| 再漫画 | `comic_4` | `https://www.zaimanhua.com` |
 
 > 获取详情/目录/正文时传入 `source` 简称即可，无需传完整 URL。
 
@@ -127,7 +127,7 @@ ReaderService service = ReaderService.getInstance();
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `source` | String | 书源简称（如 80、dubu、godamanga） |
+| `source` | String | 书源简称（如 novel_1、comic_2） |
 | `name` | String | 书源名称 |
 | `type` | int | 0=小说, 2=漫画 |
 | `typeDesc` | String | 类型描述（小说 / 漫画） |
@@ -152,7 +152,7 @@ ReaderService service = ReaderService.getInstance();
 | `name` | String | 书名 |
 | `author` | String | 作者 |
 | `bookUrl` | String | 书籍 URL（后续操作需要） |
-| `source` | String | 书源简称（后续操作需要，如 80/dubu/godamanga） |
+| `source` | String | 书源简称（后续操作需要，如 novel_1/comic_2） |
 | `sourceName` | String | 书源名称 |
 | `coverUrl` | String | 封面 URL |
 | `intro` | String | 简介 |

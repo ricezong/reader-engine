@@ -14,6 +14,9 @@ import java.util.List;
  * 提供同步的 Java API，封装 Kotlin 的 WebBook 协程调用。
  * 宿主项目通过此门面类即可完成书源的解析、初始化、搜索、详情、目录、正文操作。
  * <p>
+ * 所有方法在执行失败时会抛出 {@link SourceException}，包含友好的错误提示信息，
+ * 标注出错的书源、环节（搜索/详情/目录/正文/初始化/解析）和原始异常原因。
+ * <p>
  * 使用方式：
  * <pre>
  * // 1. 从 JSON 创建书源
@@ -51,10 +54,16 @@ public class ReaderEngine {
      *
      * @param json 书源 JSON
      * @return BookSource 对象
-     * @throws IllegalArgumentException 如果 JSON 格式错误
+     * @throws SourceException 如果 JSON 格式错误
      */
     public static BookSource parseBookSource(String json) {
-        return ReaderEngineBridge.parseBookSource(json);
+        try {
+            return ReaderEngineBridge.parseBookSource(json);
+        } catch (SourceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw SourceException.parseError("JSON 解析失败", e);
+        }
     }
 
     /**
@@ -62,10 +71,16 @@ public class ReaderEngine {
      *
      * @param json 书源数组 JSON
      * @return BookSource 列表
-     * @throws IllegalArgumentException 如果 JSON 格式错误
+     * @throws SourceException 如果 JSON 格式错误
      */
     public static List<BookSource> parseBookSources(String json) {
-        return ReaderEngineBridge.parseBookSources(json);
+        try {
+            return ReaderEngineBridge.parseBookSources(json);
+        } catch (SourceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw SourceException.parseError("JSON 数组解析失败", e);
+        }
     }
 
 
@@ -82,9 +97,19 @@ public class ReaderEngine {
      *
      * @param bookSource 书源对象
      * @return 初始化后的书源对象（variable 已设置）
+     * @throws SourceException 如果初始化失败（如 JS 执行出错）
      */
     public static BookSource initSource(BookSource bookSource) {
-        return ReaderEngineBridge.initSource(bookSource);
+        try {
+            return ReaderEngineBridge.initSource(bookSource);
+        } catch (SourceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw SourceException.initError(
+                    bookSource.getBookSourceUrl(),
+                    bookSource.getBookSourceName(),
+                    e);
+        }
     }
 
     // ==================== Variable 管理 ====================
@@ -137,9 +162,19 @@ public class ReaderEngine {
      * @param key        搜索关键词
      * @param page       页码（从 1 开始）
      * @return 搜索结果列表
+     * @throws SourceException 如果搜索失败
      */
     public static List<SearchBook> search(BookSource bookSource, String key, Integer page) {
-        return ReaderEngineBridge.search(bookSource, key, page);
+        try {
+            return ReaderEngineBridge.search(bookSource, key, page);
+        } catch (SourceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw SourceException.searchError(
+                    bookSource.getBookSourceUrl(),
+                    bookSource.getBookSourceName(),
+                    key, e);
+        }
     }
 
     /**
@@ -158,9 +193,19 @@ public class ReaderEngine {
      * @param url        发现页 URL
      * @param page       页码
      * @return 搜索结果列表
+     * @throws SourceException 如果发现失败
      */
     public static List<SearchBook> explore(BookSource bookSource, String url, Integer page) {
-        return ReaderEngineBridge.explore(bookSource, url, page);
+        try {
+            return ReaderEngineBridge.explore(bookSource, url, page);
+        } catch (SourceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw SourceException.searchError(
+                    bookSource.getBookSourceUrl(),
+                    bookSource.getBookSourceName(),
+                    "explore: " + url, e);
+        }
     }
 
     /**
@@ -178,9 +223,10 @@ public class ReaderEngine {
      * @param bookSource 书源
      * @param bookUrl    书籍详情页 URL
      * @return Book 对象（包含详情信息）
+     * @throws SourceException 如果获取详情失败
      */
     public static Book getBookInfo(BookSource bookSource, String bookUrl) {
-        return ReaderEngineBridge.getBookInfo(bookSource, bookUrl, true);
+        return getBookInfo(bookSource, bookUrl, true);
     }
 
     /**
@@ -190,9 +236,19 @@ public class ReaderEngine {
      * @param bookUrl    书籍详情页 URL
      * @param canReName  是否允许书源重命名书籍
      * @return Book 对象
+     * @throws SourceException 如果获取详情失败
      */
     public static Book getBookInfo(BookSource bookSource, String bookUrl, boolean canReName) {
-        return ReaderEngineBridge.getBookInfo(bookSource, bookUrl, canReName);
+        try {
+            return ReaderEngineBridge.getBookInfo(bookSource, bookUrl, canReName);
+        } catch (SourceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw SourceException.detailError(
+                    bookSource.getBookSourceUrl(),
+                    bookSource.getBookSourceName(),
+                    bookUrl, e);
+        }
     }
 
     /**
@@ -201,9 +257,10 @@ public class ReaderEngine {
      * @param bookSource 书源
      * @param book       已有的 Book 对象
      * @return Book 对象（包含详情信息）
+     * @throws SourceException 如果获取详情失败
      */
     public static Book getBookInfo(BookSource bookSource, Book book) {
-        return ReaderEngineBridge.getBookInfo(bookSource, book, true);
+        return getBookInfo(bookSource, book, true);
     }
 
     /**
@@ -213,9 +270,19 @@ public class ReaderEngine {
      * @param book       已有的 Book 对象
      * @param canReName  是否允许书源重命名书籍
      * @return Book 对象
+     * @throws SourceException 如果获取详情失败
      */
     public static Book getBookInfo(BookSource bookSource, Book book, boolean canReName) {
-        return ReaderEngineBridge.getBookInfo(bookSource, book, canReName);
+        try {
+            return ReaderEngineBridge.getBookInfo(bookSource, book, canReName);
+        } catch (SourceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw SourceException.detailError(
+                    bookSource.getBookSourceUrl(),
+                    bookSource.getBookSourceName(),
+                    book.getBookUrl(), e);
+        }
     }
 
     // ==================== 章节目录 ====================
@@ -226,9 +293,19 @@ public class ReaderEngine {
      * @param bookSource 书源
      * @param book       书籍对象（需包含 bookUrl 和 tocUrl）
      * @return 章节列表
+     * @throws SourceException 如果获取目录失败
      */
     public static List<BookChapter> getChapterList(BookSource bookSource, Book book) {
-        return ReaderEngineBridge.getChapterList(bookSource, book);
+        try {
+            return ReaderEngineBridge.getChapterList(bookSource, book);
+        } catch (SourceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw SourceException.tocError(
+                    bookSource.getBookSourceUrl(),
+                    bookSource.getBookSourceName(),
+                    book.getBookUrl(), e);
+        }
     }
 
     // ==================== 章节正文 ====================
@@ -240,9 +317,10 @@ public class ReaderEngine {
      * @param book        书籍对象
      * @param bookChapter 章节对象
      * @return 正文内容字符串
+     * @throws SourceException 如果获取正文失败
      */
     public static String getBookContent(BookSource bookSource, Book book, BookChapter bookChapter) {
-        return ReaderEngineBridge.getBookContent(bookSource, book, bookChapter, null);
+        return getBookContent(bookSource, book, bookChapter, null);
     }
 
     /**
@@ -253,8 +331,18 @@ public class ReaderEngine {
      * @param bookChapter   章节对象
      * @param nextChapterUrl 下一章 URL（用于某些书源正文翻页拼接）
      * @return 正文内容字符串
+     * @throws SourceException 如果获取正文失败
      */
     public static String getBookContent(BookSource bookSource, Book book, BookChapter bookChapter, String nextChapterUrl) {
-        return ReaderEngineBridge.getBookContent(bookSource, book, bookChapter, nextChapterUrl);
+        try {
+            return ReaderEngineBridge.getBookContent(bookSource, book, bookChapter, nextChapterUrl);
+        } catch (SourceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw SourceException.contentError(
+                    bookSource.getBookSourceUrl(),
+                    bookSource.getBookSourceName(),
+                    "章节: " + bookChapter.getTitle(), e);
+        }
     }
 }

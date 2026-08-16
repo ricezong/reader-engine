@@ -30,10 +30,10 @@ public class NovelSourceTest {
     private static final Logger log = LoggerFactory.getLogger(NovelSourceTest.class);
 
     private static final String[] SOURCES = {
-            "novel_80.json",       // 八零小说
-            "novel_dubu.json",     // 独步小说
-            "novel_maoyan.json",   // 猫眼看书
-            "novel_qimao.json"     // 七猫小说
+            "novel_1.json",       // 八零小说
+            "novel_2.json",       // 独步小说
+            "novel_3.json",       // 猫眼看书
+            "novel_4.json"        // 七猫小说
     };
 
     private static final String[] KEYWORDS = {
